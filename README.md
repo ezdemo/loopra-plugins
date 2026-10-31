@@ -26,13 +26,36 @@ https://github.com/ezdemo/loopra-plugins/tree/main/plugins/openapi
 https://github.com/ezdemo/loopra-plugins/tree/main/plugins/context-lens
 ```
 
-在「已安装」中启停、设置或卸载。卸载会删除该插件的文件、配置和数据；移除插件源会保留已安装插件。
+在「我的内容 → 插件」中启停、设置或卸载，发现页也可以直接卸载已安装的外部插件。安装和卸载保留当前列表与滚动位置。手动填写来源时使用「添加 → 安装插件」。卸载会删除该插件的文件、配置和数据；移除插件源会保留已安装插件。
 
 OpenAPI 使用 Loopra 宿主的 `openapi` 服务；上下文透视使用 `sessions` 服务和 Native 请求观察钩子。这两个插件需要支持相应宿主能力的 Loopra 版本。
+
+纯聊天也能通过右上角开关打开右侧栏，显示「能力」和已启用插件的面板，例如上下文透视；文件、Git 只在项目中显示。插件面板通过 `loopra.context` 和 `loopra.onContext()` 跟随当前会话。
+
+## 多插件协作
+
+多个插件的 `systemPrompt.append` 按顺序累加，不再互相覆盖。聊天猫娘的人设、OpenAPI 的接口规则和上下文透视的固定信息可以同时保留。旧版宿主需要更新并重启 Loopra，已有插件不用重装。
+
+插件可在入口模块的 `meta.hookPriority` 中为同名 Hook 声明整数优先级，数值小的先执行，默认 `0`，同级按安装顺序。它不改变 Hook 阶段顺序：全部 `systemPrompt` 完成后才执行 `llmRequest`，`llmRequestSent` 只读观察最终请求。
+
+```js
+export const meta = {
+  displayName: "我的插件",
+  hookPriority: { systemPrompt: -10, llmRequest: 20 }
+};
+
+export function systemPrompt(input) {
+  return { append: "\n补充规则。" };
+}
+```
+
+`input.text` 包含此前的追加内容，只补充规则时不要把全文再次放进 `append`。返回 `text` 会明确替换当前系统提示全文；`llmRequest` 返回 `system` 或 `body` 同样是替换，需要自行保留输入中的既有内容。优先级写在模块的 `meta` 中，不是 `package.json`。
 
 ## 开发
 
 每个插件位于 `plugins/<名称>/`，包含具有唯一 `name` 的 `package.json` 和入口文件；设置页、图标等资源随目录一起发布。Loopra 自动扫描，无需额外维护索引。
+
+完整开发规范见 [Loopra 插件文档](https://github.com/ezdemo/loopra/blob/main/docs/PLUGIN.md)，包括图标、工具与纯聊天声明、全部 Hook、设置页和页面后端、侧栏与右侧面板、宿主服务、数据持久化，以及技能、子代理、定时任务贡献。本文保留仓库安装和协作说明，接口细节以宿主文档为准。
 
 ```sh
 npm ci
@@ -49,6 +72,6 @@ Code/
   loopra-plugins/
 ```
 
-然后在 Loopra 中运行 `go test ./internal/service/plugin ./internal/controller`。也可将 `LOOPRA_PLUGIN_SOURCE_DIR` 指向本仓库根目录。
+然后在 Loopra 中运行 `go test ./internal/service/plugin ./internal/service/agent ./internal/controller`。也可将 `LOOPRA_PLUGIN_SOURCE_DIR` 指向本仓库根目录。宿主测试包含聊天猫娘、OpenAPI 和上下文透视同时启用、安装顺序变化、Hook 优先级和提示词合并。
 
 插件从 Loopra 主仓库迁入，保留 MIT 许可，见 [LICENSE](LICENSE)。
