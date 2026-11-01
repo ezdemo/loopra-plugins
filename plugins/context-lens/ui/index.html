@@ -10,27 +10,59 @@
   <main>
     <div id="status" role="status" aria-live="polite" hidden></div>
     <section id="empty" class="empty">
-      <div class="lens-mark" aria-hidden="true"><span></span></div>
-      <h1>看看 Agent 看见了什么</h1>
+      <div class="lens-mark" aria-hidden="true">◈</div>
+      <h1>上下文窗口</h1>
       <p id="empty-text">正在读取请求快照…</p>
       <button id="empty-refresh" type="button">刷新</button>
     </section>
     <div id="overview" hidden>
-      <header class="request-picker"><span class="live-dot" aria-hidden="true"></span><select id="requests" aria-label="请求快照"></select><button id="latest" type="button" title="跟随最新请求">最新</button></header>
-      <section class="composition">
-        <div class="metric"><div><strong id="total">—</strong><span>tokens · 文本估算</span></div><span id="time"></span></div>
-        <div id="map" class="context-map" role="group" aria-label="上下文组成，点击筛选"></div>
-        <div id="legend" class="legend"></div>
-        <p id="model" class="model"></p>
-      </section>
-      <details id="pin-editor" class="pin-editor"><summary><span>固定上下文</span><span id="pin-indicator"></span></summary><div class="pin-content"><textarea id="pin-note" rows="4" maxlength="2000" placeholder="希望 Agent 始终记住的补充信息，仅用于这段会话…" aria-label="固定上下文"></textarea><div class="pin-footer"><span id="pin-count">0 / 2000</span><button id="pin-save" type="button" class="primary">保存</button></div></div></details>
-      <section class="blocks-section"><div class="block-toolbar"><button id="filter-reset" type="button">全部内容</button><span id="block-count"></span></div><input id="search" type="search" placeholder="查找指令、工具、消息…" aria-label="搜索上下文"><div id="blocks" class="blocks"></div><p id="no-results" class="no-results" hidden>没有匹配的上下文</p></section>
-      <footer class="footnote"><span id="capture-note">发送前快照</span><button id="clear" type="button">清空快照</button></footer>
+      <header class="window-header">
+        <button id="collapse" class="window-title" type="button" aria-expanded="true" aria-controls="window-body"><span class="chevron" aria-hidden="true">⌄</span>上下文窗口</button>
+        <div class="model-status"><span id="model" class="model"></span><span class="measurement"><i class="live-dot" aria-hidden="true"></i><span id="measurement-label">估算</span></span></div>
+      </header>
+      <div id="window-body">
+        <section class="metrics" aria-label="上下文用量">
+          <div class="usage-metric">
+            <div class="metric-label">已用上下文 <span id="health" class="health" hidden>健康</span></div>
+            <div class="metric-value"><strong id="total">—</strong><span id="capacity">/ 未知窗口</span></div>
+            <div id="usage-note" class="metric-note">文本估算</div>
+          </div>
+          <div class="cache-metric">
+            <div class="metric-label">提示词缓存</div>
+            <div class="metric-value"><strong id="cache-rate">—</strong><span>命中</span></div>
+            <div id="cache-bar" class="cache-bar" role="progressbar" aria-label="提示词缓存命中率"><span id="cache-fill"></span></div>
+            <div id="cache-note" class="metric-note">暂无缓存数据</div>
+          </div>
+        </section>
+        <section class="composition" aria-label="上下文组成">
+          <div id="map" class="context-map grid" role="group" aria-label="上下文组成，点击筛选"></div>
+          <div class="map-footer"><div id="legend" class="legend"></div><div class="view-switch" role="group" aria-label="图表视图">
+            <button id="view-tree" type="button" aria-label="矩形视图" aria-pressed="false" title="矩形视图"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2" y="2" width="6" height="16" rx="1.5"/><rect x="10" y="2" width="8" height="9" rx="1.5"/><rect x="10" y="13" width="8" height="5" rx="1.5"/></svg></button>
+            <button id="view-grid" type="button" aria-label="网格视图" aria-pressed="true" title="网格视图"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 2h4v4H2zm6 0h4v4H8zm6 0h4v4h-4zM2 8h4v4H2zm6 0h4v4H8zm6 0h4v4h-4zM2 14h4v4H2zm6 0h4v4H8zm6 0h4v4h-4z"/></svg></button>
+          </div></div>
+        </section>
+        <section class="blocks-section">
+          <div class="block-toolbar"><span class="section-label">内容</span><div id="filters" class="filters" role="group" aria-label="内容分类"></div></div>
+          <input id="search" type="search" placeholder="搜索上下文…" aria-label="搜索上下文" hidden>
+          <div id="blocks" class="blocks"></div><p id="no-results" class="no-results" hidden>没有匹配的上下文</p>
+          <button id="show-all" class="text-button show-all" type="button" hidden></button>
+        </section>
+        <footer class="session-footer">
+          <div class="session-heading"><div id="breadcrumb" class="breadcrumb"></div><span id="round-count"></span></div>
+          <div class="trend-row"><span>本会话</span><svg id="trend" viewBox="0 0 1000 44" preserveAspectRatio="none" role="img" aria-label="近期请求上下文趋势"></svg><span id="request-count"></span></div>
+          <details class="options"><summary>快照与设置</summary>
+            <div class="request-picker"><select id="requests" aria-label="请求快照"></select><button id="latest" type="button" title="跟随最新请求">最新</button><button id="search-toggle" type="button" aria-expanded="false" aria-controls="search">搜索</button></div>
+            <details id="pin-editor" class="pin-editor"><summary>固定上下文 <span id="pin-indicator"></span></summary><div class="pin-content"><textarea id="pin-note" rows="4" maxlength="2000" placeholder="希望 Agent 始终记住的补充信息…" aria-label="固定上下文"></textarea><div class="pin-footer"><span id="pin-count">0 / 2000</span><button id="pin-save" type="button" class="primary">保存</button></div></div></details>
+            <div class="footnote"><span id="capture-note"></span><span id="time"></span><button id="clear" class="text-button" type="button">清空快照</button></div>
+          </details>
+        </footer>
+      </div>
     </div>
     <section id="inspector" class="inspector" hidden>
-      <header class="inspect-header"><button id="back" type="button">← 返回快照</button><span id="inspect-tokens"></span></header>
+      <header class="inspect-header"><button id="back" class="text-button" type="button">← 返回快照</button><span id="inspect-tokens"></span></header>
       <div class="inspect-heading"><span id="inspect-kind" class="kind-mark"></span><h2 id="inspect-title"></h2></div>
       <p id="inspect-source" class="source"></p>
+      <select id="inspect-parts" aria-label="选择内容片段" hidden></select>
       <div class="inspect-actions"><button id="pin-block" type="button">固定这段</button><button id="fold-block" type="button" hidden>下次折叠此结果</button></div>
       <p id="inspect-note" class="inspect-note" hidden></p>
       <pre id="inspect-text" tabindex="0"></pre>

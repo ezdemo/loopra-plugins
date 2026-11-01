@@ -74,7 +74,12 @@ export function onRequest({ action, value, context, config }) {
   if (action === "list") {
     const selected = records.filter(matches);
     const fallback = selected.length ? null : savedHistory(scope);
-    return { records: (fallback ? [fallback] : selected).map(({ blocks, size, ...summary }) => summary).reverse(), policy: policy(config, scope.app, scope.session), scope, warning: storageWarning };
+    let usage = null;
+    // Older hosts only expose history. The UI keeps working with text estimates.
+    if (scope.app && scope.session) {
+      try { usage = loopra.services.request("sessions", "usage", { workspaceHash: scope.app, sessionName: scope.session }); } catch {}
+    }
+    return { records: (fallback ? [fallback] : selected).map(({ blocks, size, ...summary }) => summary).reverse(), usage, policy: policy(config, scope.app, scope.session), scope, warning: storageWarning };
   }
   if (action === "detail") {
     let record = records.find(record => record.id === value.id && matches(record));

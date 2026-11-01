@@ -37,7 +37,7 @@ function printable(value) {
 // A skills directory remains a directory, not a claim that a skill was read.
 export function buildSnapshot(input, id, now = Date.now()) {
   const body = input.body || {}, blocks = [];
-  let omitted = 0, blockSequence = 0;
+  let omitted = 0, blockSequence = 0, turn = 0;
   function add(kind, text, source, title, callId = "", name = "") {
     if (text === undefined || text === null || text === "") return;
     if (blocks.length >= 800) {
@@ -46,7 +46,8 @@ export function buildSnapshot(input, id, now = Date.now()) {
       else return;
     }
     const full = printable(text), bytes = Buffer.byteLength(full, "utf8");
-    blocks.push({ id: "block-" + blockSequence++, kind, title: title || labels[kind], source, name, callId,
+    blocks.push({ id: "block-" + blockSequence++, kind, title: title || labels[kind], source, name, callId, turn,
+      filePath: calls.get(callId)?.filePath || "",
       foldable: kind === "result" && !!callId && (input.foldableCalls || []).includes(callId),
       folded: kind === "result" && full.includes(FOLDED), text: full.slice(0, MAX_TEXT), truncated: full.length > MAX_TEXT,
       bytes, tokens: kind === "media" ? 0 : Math.ceil(bytes / 4) });
@@ -71,7 +72,8 @@ export function buildSnapshot(input, id, now = Date.now()) {
       if (typeof part === "string") { add(kind, part, path); return; }
       if (!part) return;
       if (part.type === "tool_result") {
-        add("result", part.content, path, part.tool_use_id || "工具结果", part.tool_use_id);
+        const call = calls.get(part.tool_use_id);
+        add("result", part.content, path, call?.title || "工具结果", part.tool_use_id, call?.name);
       } else if (part.type === "tool_use") {
         add("assistant", { name: part.name, arguments: part.input }, path, "调用 " + part.name);
       } else if (part.text !== undefined) {
@@ -84,15 +86,13 @@ export function buildSnapshot(input, id, now = Date.now()) {
       }
     });
   }
-  if (body.system) system(body.system, "system");
-  if (body.instructions) system(body.instructions, "instructions");
   const messages = Array.isArray(body.messages) ? body.messages : Array.isArray(body.input) ? body.input : [];
   const calls = new Map();
   function remember(id, name, args) {
     if (!id) return;
     if (typeof args === "string") { try { args = JSON.parse(args); } catch { args = {}; } }
-    const path = args?.path || args?.file_path;
-    calls.set(id, { name, title: name + (typeof path === "string" ? " · " + path : "") });
+    const path = args?.path || args?.file_path || args?.filePath;
+    calls.set(id, { name, filePath: typeof path === "string" ? path : "", title: name + (typeof path === "string" ? " · " + path : "") });
   }
   for (const message of messages) {
     if (!message || typeof message !== "object") continue;
@@ -100,10 +100,14 @@ export function buildSnapshot(input, id, now = Date.now()) {
     if (message.type === "function_call") remember(message.call_id, message.name || "工具", message.arguments);
     if (Array.isArray(message.content)) for (const part of message.content) { if (part?.type === "tool_use") remember(part.id, part.name || "工具", part.input); }
   }
-  if (typeof body.input === "string") add("user", body.input, "input");
+  if (body.system) system(body.system, "system");
+  if (body.instructions) system(body.instructions, "instructions");
+  if (typeof body.input === "string") { turn++; add("user", body.input, "input"); }
   messages.forEach((message, index) => {
+    if (!message) return;
     const path = `${input.protocol === "history" ? "history" : Array.isArray(body.messages) ? "messages" : "input"}[${index}]`;
-    if (typeof message === "string") { add("user", message, path); return; }
+    if (typeof message === "string") { turn++; add("user", message, path); return; }
+    if (message.role === "user" && (!Array.isArray(message.content) || message.content.some(part => part && part.type !== "tool_result"))) turn++;
     if (message.role === "system" || message.role === "developer") system(message.content, path + ".content");
     else if (message.role === "tool") add("result", message.content, path + ".content", calls.get(message.tool_call_id)?.title || message.tool_name || message.name || "工具结果", message.tool_call_id, calls.get(message.tool_call_id)?.name || message.tool_name || message.name);
     else if (message.type === "function_call_output") add("result", message.output, path + ".output", calls.get(message.call_id)?.title || "工具结果", message.call_id, calls.get(message.call_id)?.name);
@@ -120,5 +124,5 @@ export function buildSnapshot(input, id, now = Date.now()) {
   (body.tools || []).forEach((tool, index) => add("tools", tool, `tools[${index}]`, tool.function?.name || tool.name || tool.type || "工具定义"));
   const groups = Object.entries(labels).map(([kind, label]) => ({ kind, label, count: blocks.filter(b => b.kind === kind).length, tokens: blocks.filter(b => b.kind === kind).reduce((sum, b) => sum + b.tokens, 0) })).filter(group => group.count);
   return { id, at: now, app: input.app || "", session: input.sessionId || "", parent: input.parentSessionId || "", model: body.model || input.model || "", protocol: input.protocol || "", invocation: input.invocationId || "", requestBytes: input.requestBytes || 0,
-    tokens: groups.reduce((sum, group) => sum + group.tokens, 0), groups, blocks, omitted, media: blocks.some(block => block.kind === "media"), truncated: omitted > 0 || blocks.some(block => block.truncated) };
+    tokens: groups.reduce((sum, group) => sum + group.tokens, 0), rounds: turn, groups, blocks, omitted, media: blocks.some(block => block.kind === "media"), truncated: omitted > 0 || blocks.some(block => block.truncated) };
 }

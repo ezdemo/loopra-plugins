@@ -42,7 +42,7 @@ const html = await readFile(new URL('../plugins/context-lens/ui/index.html', imp
 const script = await readFile(new URL('../plugins/context-lens/ui/app.js', import.meta.url), 'utf8');
 const page = html.replace('<script src="_loopra/bridge.js"></script>', '').replace('<script src="app.js"></script>', () => `<script>${script}</script>`);
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
-function setup({ holdDetail = false, recorded = snapshot } = {}) {
+function setup({ holdDetail = false, recorded = snapshot, usage = null, summaries = null } = {}) {
   let config = {}, release, context = { workspaceHash: 'project', sessionId: 'project/one' };
   const listeners = [], requests = [];
   const dom = new JSDOM(page, { runScripts: 'dangerously', beforeParse(window) {
@@ -50,7 +50,7 @@ function setup({ holdDetail = false, recorded = snapshot } = {}) {
       config: { get: async () => structuredClone(config), set: async value => { config = JSON.parse(JSON.stringify(value)); return config; } },
       request: async (action, value) => {
         requests.push({ action, value });
-        if (action === 'list') return { records: context.workspaceHash === 'project' ? [{ ...recorded, blocks: undefined }] : [] };
+        if (action === 'list') return { records: context.workspaceHash === 'project' ? summaries || [{ ...recorded, blocks: undefined }] : [], usage };
         if (action === 'detail') { if (holdDetail) await new Promise(resolve => { release = resolve; }); return recorded; }
         if (action === 'clear') return { ok: true };
         throw new Error(action);
@@ -67,8 +67,8 @@ test('lens UI filters real blocks, inspects inert text, and saves scoped pin/fol
     await settle(); await settle();
     const d = ui.document;
     assert.equal(d.querySelector('#overview').hidden, false);
-    assert.equal(d.querySelectorAll('.map-cell').length, snapshot.groups.length);
-    d.querySelector('.map-cell[aria-label^="工具结果"]').click();
+    assert.equal(d.querySelectorAll('.grid-cell').length, 400);
+    d.querySelector('#filters [data-kind="file"]').click();
     assert.equal(d.querySelectorAll('.block').length, 1);
     d.querySelector('.block').click();
     assert.equal(d.querySelector('#inspector').hidden, false);
@@ -113,7 +113,7 @@ test('external history is labelled and hides controls that only work on native r
     assert.match(d.querySelector('#capture-note').textContent, /不代表当时的完整模型请求.*截断/);
     assert.equal(d.querySelector('#pin-editor').hidden, true);
     assert.equal(d.querySelector('#clear').hidden, true, 'snapshot clearing cannot imply deleting conversation history');
-    d.querySelector('.map-cell[aria-label^="工具结果"]').click();
+    d.querySelector('#legend [aria-label^="文件"]').click();
     d.querySelector('.block').click();
     assert.equal(d.querySelector('#fold-block').hidden, true);
     assert.equal(d.querySelector('#pin-block').hidden, true);
@@ -141,4 +141,95 @@ test('a late detail response cannot show the previous workspace snapshot', async
     assert.equal(ui.document.querySelector('#empty').hidden, false);
     assert.equal(ui.document.querySelectorAll('.block').length, 0);
   } finally { ui.close(); }
+});
+
+test('capacity grid uses reported context, real cache statistics, and preserves view filters', async () => {
+  const usage = { model: snapshot.model, at: snapshot.at + 1, lastPromptTokens: 2500, maxContextTokens: 10000, promptTokens: 10000, cacheHit: 3400 };
+  const ui = setup({ usage });
+  try {
+    await settle(); await settle();
+    const d = ui.document;
+    assert.equal(d.querySelector('#total').textContent, '2.5K');
+    assert.equal(d.querySelector('#capacity').textContent, '/ 10K token');
+    assert.equal(d.querySelector('#measurement-label').textContent, '已计数');
+    assert.equal(d.querySelector('#cache-rate').textContent, '34%');
+    assert.equal(d.querySelector('#cache-bar').getAttribute('aria-valuenow'), '34');
+    assert.equal(d.querySelector('#cache-fill').style.width, '34%');
+    assert.match(d.querySelector('#cache-note').textContent, /3.4K.*6.6K/);
+    assert.equal(d.querySelectorAll('.grid-cell').length, 400);
+    assert.equal([...d.querySelectorAll('.grid-cell')].filter(cell => cell.title.startsWith('剩余空间')).length, 300);
+    d.querySelector('#legend [aria-label^="文件"]').click();
+    assert.equal(d.querySelectorAll('.block').length, 1);
+    d.querySelector('#view-tree').click();
+    assert.ok(d.querySelectorAll('.map-cell').length >= 4);
+    assert.equal(d.querySelector('#view-tree').getAttribute('aria-pressed'), 'true');
+    assert.equal(d.querySelector('#filters [data-kind="file"]').getAttribute('aria-pressed'), 'true');
+    d.querySelector('#view-grid').click();
+    assert.equal(d.querySelectorAll('.grid-cell').length, 400);
+    d.querySelector('#collapse').click();
+    assert.equal(d.querySelector('#window-body').hidden, true);
+    d.querySelector('#collapse').click();
+    assert.equal(d.querySelector('#window-body').hidden, false);
+  } finally { ui.close(); }
+});
+
+test('missing usage and stale or mismatched model counts retain honest estimates', async () => {
+  for (const usage of [null, { model: snapshot.model, at: snapshot.at - 1, lastPromptTokens: 9999 }, { model: 'other-model', at: snapshot.at + 1, lastPromptTokens: 9999, maxContextTokens: 10000 }]) {
+    const ui = setup({ usage });
+    try {
+      await settle(); await settle();
+      const d = ui.document;
+      assert.match(d.querySelector('#total').textContent, /^~/);
+      assert.equal(d.querySelector('#measurement-label').textContent, '估算');
+      assert.equal(d.querySelector('#cache-rate').textContent, '—');
+      assert.equal(d.querySelector('#cache-bar').hasAttribute('aria-valuenow'), false);
+      assert.equal(d.querySelector('#capacity').textContent, '/ 未知窗口');
+      assert.equal(d.querySelector('#health').hidden, true);
+      assert.equal(d.querySelectorAll('.grid-cell').length, 400);
+    } finally { ui.close(); }
+  }
+});
+
+test('grouped tool results retain individual source and fold identity; search and expansion work', async () => {
+  const recorded = buildSnapshot({ app: 'project', sessionId: 'one', protocol: 'chat_completions', body: { messages: [
+    { role: 'user', content: 'inspect' },
+    ...Array.from({ length: 2 }, (_, i) => ({ role: 'tool', name: 'powershell', tool_call_id: 'shell-' + i, content: 'output-' + i })),
+  ], tools: Array.from({ length: 12 }, (_, i) => ({ name: 'tool-' + i })) }, foldableCalls: ['shell-0', 'shell-1'] }, 'grouped');
+  const ui = setup({ recorded });
+  try {
+    await settle(); await settle();
+    const d = ui.document;
+    assert.equal(d.querySelectorAll('.block').length, 8);
+    d.querySelector('#show-all').click();
+    assert.equal(d.querySelectorAll('.block').length, 14);
+    d.querySelector('#filters [data-kind="result"]').click();
+    assert.equal(d.querySelectorAll('.block').length, 1);
+    assert.match(d.querySelector('.block').textContent, /×2/);
+    d.querySelector('.block').click();
+    const select = d.querySelector('#inspect-parts');
+    assert.equal(select.hidden, false);
+    select.value = '1'; select.dispatchEvent(new ui.window.Event('change'));
+    assert.equal(d.querySelector('#inspect-text').textContent, 'output-1');
+    d.querySelector('#fold-block').click(); await settle();
+    assert.deepEqual(ui.config.rules[0].folded, ['shell-1']);
+    d.querySelector('#back').click();
+    d.querySelector('#filters [data-kind=""]').click();
+    d.querySelector('#search').value = 'tool-11';
+    d.querySelector('#search').dispatchEvent(new ui.window.Event('input'));
+    assert.equal(d.querySelectorAll('.block').length, 1);
+    assert.match(d.querySelector('.block').textContent, /tool-11/);
+  } finally { ui.close(); }
+});
+
+test('Anthropic file reads use the same call metadata without counting tool results as user turns', () => {
+  const record = buildSnapshot({ protocol: 'anthropic', body: { messages: [
+    { role: 'user', content: [{ type: 'text', text: 'Read the actor' }] },
+    { role: 'assistant', content: [{ type: 'tool_use', id: 'read-a', name: 'read', input: { file_path: '/scripts/actor.gd' } }] },
+    { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'read-a', content: 'class_name Actor' }] },
+  ] } }, 'anthropic-file');
+  const file = record.blocks.find(block => block.kind === 'result');
+  assert.equal(file.filePath, '/scripts/actor.gd');
+  assert.equal(file.name, 'read');
+  assert.equal(record.rounds, 1);
+  assert.equal(file.turn, 1);
 });
