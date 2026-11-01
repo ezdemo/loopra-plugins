@@ -1,6 +1,6 @@
 {
   "name": "context-lens",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "type": "module",
   "description": "查看模型发送前的上下文快照和会话历史",
   "loopra": {

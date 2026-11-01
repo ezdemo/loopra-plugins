@@ -169,6 +169,58 @@
     });
     $("trend").setAttribute("aria-label", `最近 ${recent.length} 个请求的文本估算：${recent.map(record => number(record.tokens)).join("，")} tokens`);
   }
+  function jsonToken(value) {
+    const kind = value === null ? "null" : typeof value;
+    return node("span", JSON.stringify(value), "json-" + kind);
+  }
+  function jsonNode(value, key, comma = "", root = false) {
+    const composite = value !== null && typeof value === "object";
+    const longString = typeof value === "string" && value.length > 160;
+    const entries = composite ? Object.entries(value) : [];
+    const expandable = root || entries.length > 0 || longString;
+    const row = node(expandable ? "details" : "div", undefined, expandable ? "json-node" : "json-line");
+    const line = expandable ? node("summary", undefined, "json-summary") : row;
+    const punctuation = text => node("span", text, "json-punctuation");
+    if (root) line.append(node("span", "JSON", "json-language"));
+    if (key !== undefined) line.append(node("span", JSON.stringify(key), "json-key"), punctuation(": "));
+    if (composite) {
+      const open = Array.isArray(value) ? "[" : "{", close = Array.isArray(value) ? "]" : "}";
+      line.append(punctuation(open));
+      if (expandable) {
+        line.append(node("span", ` … ${close}${comma}`, "json-preview"), node("span", `${entries.length} 项`, "json-count"));
+        let loaded = false;
+        row.addEventListener("toggle", () => {
+          if (!row.open || loaded) return;
+          loaded = true;
+          const children = node("div", undefined, "json-children");
+          entries.forEach(([name, item], index) => children.append(jsonNode(item, Array.isArray(value) ? undefined : name, index < entries.length - 1 ? "," : "")));
+          const end = node("div", undefined, "json-line"); end.append(punctuation(close + comma));
+          row.append(children, end);
+        });
+      } else line.append(punctuation(close + comma));
+    } else if (expandable) {
+      const preview = node("span", undefined, "json-preview");
+      preview.append(jsonToken(longString ? value.slice(0, 100) + "…" : value), punctuation(comma)); line.append(preview);
+      if (longString) line.append(node("span", `${number(value.length)} 字符`, "json-count"));
+      let loaded = false;
+      row.addEventListener("toggle", () => {
+        if (!row.open || loaded) return;
+        loaded = true;
+        const full = node("div", undefined, "json-line json-full-value"); full.append(jsonToken(value), punctuation(comma)); row.append(full);
+      });
+    } else line.append(jsonToken(value), punctuation(comma));
+    if (expandable) row.prepend(line);
+    return row;
+  }
+  function renderContent(text) {
+    $("inspect-json").replaceChildren(); $("inspect-text").textContent = "";
+    let value;
+    try { value = JSON.parse(text); } catch {
+      $("inspect-json").hidden = true; $("inspect-text").hidden = false; $("inspect-text").textContent = text; return;
+    }
+    $("inspect-text").hidden = true; $("inspect-json").hidden = false;
+    $("inspect-json").append(jsonNode(value, undefined, "", true));
+  }
   function inspectRow(parts) {
     selectedParts = parts;
     $("inspect-parts").hidden = parts.length < 2;
@@ -180,7 +232,7 @@
     $("overview").hidden = true; $("inspector").hidden = false;
     $("inspect-title").textContent = block.title; $("inspect-kind").style.setProperty("--tone", tones[kindOf(block)]);
     $("inspect-tokens").textContent = block.kind === "media" ? "媒体不计入估算" : "~" + number(block.tokens) + " tokens";
-    $("inspect-source").textContent = block.source + " · " + time(snapshot.at); $("inspect-text").textContent = block.text;
+    $("inspect-source").textContent = block.source + " · " + time(snapshot.at); renderContent(block.text);
     $("inspect-note").hidden = !block.truncated;
     $("inspect-note").textContent = "此段过长，展示保留的开头部分；用量按截断前文本估算。";
   }

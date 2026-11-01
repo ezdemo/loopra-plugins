@@ -83,6 +83,23 @@ select { border: 1px solid var(--border); border-radius: 6px; padding: 5px; back
 #inspect-parts { width: 100%; margin-bottom: 12px; }
 .inspect-note { font-size: 12px; color: var(--warning, #bd8b3b); }
 #inspect-text { padding: 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--track); font: 12px/1.85 var(--loopra-code, Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 2; }
+.json-code { padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--track); font: 12px/1.85 var(--loopra-code, Consolas, monospace); }
+.json-summary, .json-line { min-height: 28px; padding: 2px 0 2px 16px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.json-summary { cursor: pointer; list-style: none; border-radius: 4px; }
+.json-summary::-webkit-details-marker { display: none; }
+.json-summary::before { content: "›"; display: inline-block; width: 14px; margin-left: -14px; color: var(--subtle); transition: transform .15s; }
+.json-node[open] > .json-summary::before { transform: rotate(90deg); }
+.json-summary:hover { background: var(--hover, #e8e8ed); }
+.json-node[open] > .json-summary > .json-preview, .json-node[open] > .json-summary > .json-count { display: none; }
+.json-children { margin-left: 16px; padding-left: 10px; border-left: 1px solid var(--border); }
+.json-language { margin-right: 12px; color: var(--subtle); font-size: 10px; letter-spacing: .7px; }
+.json-count { margin-left: 12px; color: var(--subtle); font-size: 11px; }
+.json-key { color: color-mix(in srgb, #7c71e8 85%, var(--text, #181b25)); }
+.json-string { color: color-mix(in srgb, #249e74 85%, var(--text, #181b25)); }
+.json-number { color: color-mix(in srgb, #d89137 85%, var(--text, #181b25)); }
+.json-boolean, .json-null { color: color-mix(in srgb, #4e94e8 85%, var(--text, #181b25)); }
+.json-punctuation { color: var(--secondary, #626a7f); }
+.json-full-value { margin-left: 16px; }
 @media (max-width: 800px) {
   .legend { gap: 6px 12px; font-size: 12px; }
   .legend .legend-value { font-size: 11px; }

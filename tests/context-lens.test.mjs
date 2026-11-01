@@ -94,6 +94,63 @@ test('historical sessions project saved reasoning and calls without inventing re
   assert.ok(!record.groups.some(group => ['tools', 'system'].includes(group.kind)));
 });
 
+test('JSON details highlight types and lazily expand objects and long strings from a collapsed state', async () => {
+  const description = '<script>malicious()</script>\n' + 'Read the project safely. '.repeat(30);
+  const value = { function: { description, parameters: { limit: 20, enabled: true, empty: null, required: ['path'] } } };
+  const recorded = { ...snapshot, blocks: [{ id: 'json', kind: 'tools', title: 'rg', source: 'tools[0]', tokens: 500, text: JSON.stringify(value) }] };
+  const ui = setup({ recorded });
+  try {
+    await settle(); await settle();
+    const d = ui.document;
+    d.querySelector('.block').click();
+    assert.equal(d.querySelector('#inspect-text').hidden, true);
+    assert.equal(d.querySelector('#inspect-json').hidden, false);
+    let root = d.querySelector('#inspect-json > details');
+    assert.equal(root.open, false);
+    assert.equal(root.querySelector('.json-children'), null, 'collapsed content is not rendered eagerly');
+    root.open = true; await settle();
+    const fn = root.querySelector('.json-children > details');
+    assert.equal(fn.open, false);
+    assert.equal(fn.querySelector('.json-key').textContent, '"function"');
+    fn.open = true; await settle();
+    const [desc, parameters] = fn.querySelector('.json-children').children;
+    assert.equal(desc.open, false);
+    assert.ok(desc.querySelector('.json-preview').textContent.length < description.length);
+    desc.open = true; await settle();
+    assert.equal(desc.querySelector('.json-full-value .json-string').textContent, JSON.stringify(description));
+    assert.equal(d.querySelector('#inspect-json script'), null);
+    parameters.open = true; await settle();
+    assert.equal(parameters.querySelector('.json-number').textContent, '20');
+    assert.equal(parameters.querySelector('.json-boolean').textContent, 'true');
+    assert.equal(parameters.querySelector('.json-null').textContent, 'null');
+    const array = parameters.querySelector('.json-children > details');
+    assert.equal(array.open, false);
+    array.open = true; await settle();
+    assert.equal(array.querySelector('.json-children .json-string').textContent, '"path"');
+    d.querySelector('#back').click(); d.querySelector('.block').click();
+    root = d.querySelector('#inspect-json > details');
+    assert.equal(root.open, false, 'opening a detail starts collapsed again');
+  } finally { ui.close(); }
+});
+
+test('plain and truncated JSON content remains readable as inert original text', async () => {
+  for (const text of ['plain <script>unsafe()</script>', '{"function": {"description": "truncated']) {
+    const recorded = { ...snapshot, blocks: [{ id: 'text', kind: 'tools', title: 'rg', source: 'tools[0]', tokens: 100, text, truncated: true }] };
+    const ui = setup({ recorded });
+    try {
+      await settle(); await settle();
+      const d = ui.document;
+      d.querySelector('.block').click();
+      assert.equal(d.querySelector('#inspect-json').hidden, true);
+      assert.equal(d.querySelector('#inspect-json').childElementCount, 0);
+      assert.equal(d.querySelector('#inspect-text').hidden, false);
+      assert.equal(d.querySelector('#inspect-text').textContent, text);
+      assert.equal(d.querySelector('#inspect-text script'), null);
+      assert.equal(d.querySelector('#inspect-note').hidden, false);
+    } finally { ui.close(); }
+  }
+});
+
 test('external history is labelled and hides controls that only work on native requests', async () => {
   const recorded = buildHistory({ messages: body.messages.slice(1), at: 123, revision: 'r1', agentId: 'pi', native: false, truncated: true }, { app: 'project', session: 'one' });
   const ui = setup({ recorded });
