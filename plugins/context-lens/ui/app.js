@@ -75,19 +75,32 @@
     if (!snapshot) return;
     const map = $("map"), legend = $("legend"); map.replaceChildren(); legend.replaceChildren();
     const groups = composition(), total = groups.reduce((sum, group) => sum + group.weight, 0);
-    // Largest-remainder allocation keeps all 400 cells proportional, including free space.
-    const shares = groups.map(group => { const exact = total ? group.weight / total * 400 : 0; return { group, count: Math.floor(exact), fraction: exact % 1 }; });
+    // Each nonempty text category gets at least one cell. Legend values stay exact.
+    const shares = groups.map(group => {
+      const exact = total ? group.weight / total * 400 : 0;
+      const minimum = group.kind !== "free" && group.tokens > 0 ? 1 : 0;
+      return { group, exact, minimum, count: Math.max(minimum, Math.floor(exact)) };
+    });
     let remaining = 400 - shares.reduce((sum, share) => sum + share.count, 0);
-    const ranked = [...shares].sort((a, b) => b.fraction - a.fraction);
-    for (let i = 0; i < remaining && ranked.length; i++) ranked[i % ranked.length].count++;
+    while (remaining < 0) {
+      const adjustable = shares.filter(share => share.count > share.minimum);
+      const donor = adjustable.find(share => share.group.kind === "free") || adjustable.sort((a, b) => b.count - a.count)[0];
+      if (!donor) break;
+      donor.count--; remaining++;
+    }
+    while (remaining > 0 && total) {
+      const recipient = [...shares].sort((a, b) => (b.exact - b.count) - (a.exact - a.count))[0];
+      recipient.count++; remaining--;
+    }
     shares.forEach(({ group, count }) => {
       for (let i = 0; i < count; i++) {
         const cell = node("span", undefined, `grid-cell${filter && group.kind !== filter ? " dimmed" : ""}`);
+        cell.dataset.kind = group.kind;
         cell.style.setProperty("--tone", tones[group.kind]); cell.setAttribute("aria-hidden", "true"); cell.title = `${group.label} ${number(group.tokens)}`;
         cell.onclick = () => { if (group.kind !== "free") setFilter(group.kind); }; map.append(cell);
       }
     });
-    if (!total) for (let i = 0; i < 400; i++) map.append(node("span", undefined, "grid-cell"));
+    if (!total) for (let i = map.children.length; i < 400; i++) map.append(node("span", undefined, "grid-cell"));
     groups.forEach(group => {
       const button = node("button"); button.type = "button"; button.style.setProperty("--tone", tones[group.kind]);
       button.setAttribute("aria-label", `${group.label}，${number(group.tokens)} tokens`); button.setAttribute("aria-pressed", String(filter === group.kind));

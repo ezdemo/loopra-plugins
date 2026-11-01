@@ -164,6 +164,54 @@ test('capacity grid uses reported context, real cache statistics, and category f
   } finally { ui.close(); }
 });
 
+test('small context categories get at least one cell while legend values remain unchanged', async () => {
+  const result = snapshot.blocks.find(block => block.kind === 'result');
+  const blocks = [
+    { ...snapshot.blocks.find(block => block.kind === 'system'), tokens: 736 },
+    { ...snapshot.blocks.find(block => block.kind === 'tools'), tokens: 6190 },
+    { ...result, tokens: 718 },
+    { ...result, id: 'shell', name: 'powershell', filePath: '', title: 'powershell', tokens: 2240 },
+    { ...snapshot.blocks.find(block => block.kind === 'user'), tokens: 519 },
+  ];
+  const recorded = { ...snapshot, blocks, tokens: blocks.reduce((sum, block) => sum + block.tokens, 0) };
+  const usage = { model: snapshot.model, at: snapshot.at + 1, lastPromptTokens: 10900, maxContextTokens: 1048576 };
+  const ui = setup({ recorded, usage });
+  try {
+    await settle(); await settle();
+    const d = ui.document;
+    const cells = kind => d.querySelectorAll(`.grid-cell[data-kind="${kind}"]`).length;
+    for (const [kind, label, value] of [['system', '系统提示词', '736'], ['tools', '工具', '6.19K'], ['file', '文件', '718'], ['result', '工具结果', '2.24K'], ['chat', '会话内容', '519']]) {
+      assert.ok(cells(kind) >= 1, `${kind} must be visible`);
+      assert.equal(d.querySelector(`#legend button[aria-label^="${label}，"] .legend-value`).textContent, value);
+    }
+    assert.equal(cells('system'), 1);
+    assert.equal(cells('file'), 1);
+    assert.equal(cells('chat'), 1);
+    assert.equal(cells('tools'), 2);
+    assert.equal(cells('free'), 394);
+    assert.equal(d.querySelectorAll('.grid-cell').length, 400);
+    assert.equal(d.querySelector('#total').textContent, '10.9K');
+    d.querySelector('.grid-cell[data-kind="system"]').click();
+    assert.equal(d.querySelector('#filters [data-kind="system"]').getAttribute('aria-pressed'), 'true');
+    assert.equal(d.querySelectorAll('.block').length, 1);
+  } finally { ui.close(); }
+});
+
+test('minimum category cells fit in the fixed grid even without free space', async () => {
+  const blocks = ['system', 'tools', 'user'].map((kind, i) => ({ id: String(i), kind, title: kind, text: kind, source: kind, tokens: kind === 'tools' ? 1000000 : 1 }));
+  const recorded = { ...snapshot, blocks, tokens: 1000002 };
+  const ui = setup({ recorded });
+  try {
+    await settle(); await settle();
+    const d = ui.document;
+    assert.equal(d.querySelectorAll('.grid-cell').length, 400);
+    assert.equal(d.querySelectorAll('.grid-cell[data-kind="system"]').length, 1);
+    assert.equal(d.querySelectorAll('.grid-cell[data-kind="chat"]').length, 1);
+    assert.equal(d.querySelectorAll('.grid-cell[data-kind="tools"]').length, 398);
+    assert.equal(d.querySelectorAll('.grid-cell[data-kind="free"]').length, 0);
+  } finally { ui.close(); }
+});
+
 test('missing usage and stale or mismatched model counts retain honest estimates', async () => {
   for (const usage of [null, { model: snapshot.model, at: snapshot.at - 1, lastPromptTokens: 9999 }, { model: 'other-model', at: snapshot.at + 1, lastPromptTokens: 9999, maxContextTokens: 10000 }]) {
     const ui = setup({ usage });
