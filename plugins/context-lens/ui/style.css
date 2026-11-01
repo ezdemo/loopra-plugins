@@ -58,7 +58,6 @@ main { margin: auto; padding: 20px 22px 14px; border: 1px solid var(--border); b
 .filters { display: flex; flex-wrap: wrap; padding: 2px; background: var(--track); border-radius: 9px; }
 .filters button { padding: 3px 11px; color: var(--subtle); font-size: 13px; }
 .filters button[aria-pressed="true"] { background: var(--surface, #fff); box-shadow: 0 0 0 1px var(--border), 0 1px 3px #0001; color: var(--text, #181b25); }
-#search { width: 100%; padding: 8px 10px; margin: 4px 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface, #fff); }
 .block { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 100px 60px; align-items: center; gap: 12px; width: 100%; min-height: 36px; padding: 5px 0; text-align: left; border-radius: 5px; }
 .block-identity { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .block-identity strong { font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -83,10 +82,6 @@ main { margin: auto; padding: 20px 22px 14px; border: 1px solid var(--border); b
 .trend-area { fill: color-mix(in srgb, var(--accent) 14%, transparent); }
 .trend-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .trend-point { fill: var(--surface, #fff); stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
-.options { margin-top: 12px; }
-.options > summary { width: fit-content; cursor: pointer; font-size: 11px; opacity: .7; }
-.request-picker { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
-.request-picker select { flex: 1; min-width: 0; }
 select { border: 1px solid var(--border); border-radius: 6px; padding: 5px; background: var(--surface, #fff); }
 .pin-editor { border: 1px solid var(--border); border-radius: 9px; }
 .pin-editor summary { cursor: pointer; padding: 9px 11px; }
@@ -95,8 +90,6 @@ select { border: 1px solid var(--border); border-radius: 6px; padding: 5px; back
 .pin-content textarea { width: 100%; resize: vertical; min-height: 90px; padding: 9px; border: 1px solid var(--border); background: var(--surface, #fff); border-radius: 7px; }
 .pin-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
 button.primary { background: var(--accent); color: #fff; }
-.footnote { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 0 0; font-size: 11px; }
-.footnote button { margin-left: auto; font-size: inherit; }
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; text-align: center; padding: 24px 10px; }
 .empty h1 { font-size: 18px; font-weight: 600; margin: 15px 0 8px; }
 .empty p { max-width: 290px; color: var(--subtle); font-size: 12px; line-height: 1.8; }

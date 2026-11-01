@@ -77,7 +77,7 @@ test('lens UI filters real blocks, inspects inert text, and saves scoped pin/fol
     d.querySelector('#fold-block').click(); await settle();
     assert.deepEqual(ui.config.rules[0].folded, ['read-1']);
     assert.equal(ui.config.rules[0].key, '["project","one"]');
-    d.querySelector('#back').click();
+    d.querySelector('#pin-block').click();
     d.querySelector('#pin-note').value = 'Remember the migration constraint';
     d.querySelector('#pin-note').dispatchEvent(new ui.window.Event('input'));
     d.querySelector('#pin-save').click(); await settle();
@@ -109,10 +109,9 @@ test('external history is labelled and hides controls that only work on native r
     await settle(); await settle();
     const d = ui.document;
     assert.equal(d.querySelector('#overview').hidden, false);
-    assert.match(d.querySelector('#requests').textContent, /会话历史/);
+    assert.match(d.querySelector('#measurement-label').textContent, /历史估算/);
     assert.match(d.querySelector('#capture-note').textContent, /不代表当时的完整模型请求.*截断/);
     assert.equal(d.querySelector('#pin-editor').hidden, true);
-    assert.equal(d.querySelector('#clear').hidden, true, 'snapshot clearing cannot imply deleting conversation history');
     d.querySelector('#legend [aria-label^="文件"]').click();
     d.querySelector('.block').click();
     assert.equal(d.querySelector('#fold-block').hidden, true);
@@ -186,7 +185,7 @@ test('missing usage and stale or mismatched model counts retain honest estimates
   }
 });
 
-test('grouped tool results retain individual source and fold identity; search and expansion work', async () => {
+test('grouped tool results retain individual source and fold identity; expansion works', async () => {
   const recorded = buildSnapshot({ app: 'project', sessionId: 'one', protocol: 'chat_completions', body: { messages: [
     { role: 'user', content: 'inspect' },
     ...Array.from({ length: 2 }, (_, i) => ({ role: 'tool', name: 'powershell', tool_call_id: 'shell-' + i, content: 'output-' + i })),
@@ -210,10 +209,7 @@ test('grouped tool results retain individual source and fold identity; search an
     assert.deepEqual(ui.config.rules[0].folded, ['shell-1']);
     d.querySelector('#back').click();
     d.querySelector('#filters [data-kind=""]').click();
-    d.querySelector('#search').value = 'tool-11';
-    d.querySelector('#search').dispatchEvent(new ui.window.Event('input'));
-    assert.equal(d.querySelectorAll('.block').length, 1);
-    assert.match(d.querySelector('.block').textContent, /tool-11/);
+    assert.equal(d.querySelectorAll('.block').length, 8);
   } finally { ui.close(); }
 });
 

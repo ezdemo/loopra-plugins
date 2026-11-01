@@ -42,18 +42,12 @@
         </section>
         <section class="blocks-section">
           <div class="block-toolbar"><span class="section-label">内容</span><div id="filters" class="filters" role="group" aria-label="内容分类"></div></div>
-          <input id="search" type="search" placeholder="搜索上下文…" aria-label="搜索上下文" hidden>
           <div id="blocks" class="blocks"></div><p id="no-results" class="no-results" hidden>没有匹配的上下文</p>
           <button id="show-all" class="text-button show-all" type="button" hidden></button>
         </section>
         <footer class="session-footer">
           <div class="session-heading"><div id="breadcrumb" class="breadcrumb"></div><span id="round-count"></span></div>
           <div class="trend-row"><span>本会话</span><svg id="trend" viewBox="0 0 1000 44" preserveAspectRatio="none" role="img" aria-label="近期请求上下文趋势"></svg><span id="request-count"></span></div>
-          <details class="options"><summary>快照与设置</summary>
-            <div class="request-picker"><select id="requests" aria-label="请求快照"></select><button id="latest" type="button" title="跟随最新请求">最新</button><button id="search-toggle" type="button" aria-expanded="false" aria-controls="search">搜索</button></div>
-            <details id="pin-editor" class="pin-editor"><summary>固定上下文 <span id="pin-indicator"></span></summary><div class="pin-content"><textarea id="pin-note" rows="4" maxlength="2000" placeholder="希望 Agent 始终记住的补充信息…" aria-label="固定上下文"></textarea><div class="pin-footer"><span id="pin-count">0 / 2000</span><button id="pin-save" type="button" class="primary">保存</button></div></div></details>
-            <div class="footnote"><span id="capture-note"></span><span id="time"></span><button id="clear" class="text-button" type="button">清空快照</button></div>
-          </details>
         </footer>
       </div>
     </div>
@@ -61,8 +55,10 @@
       <header class="inspect-header"><button id="back" class="text-button" type="button">← 返回快照</button><span id="inspect-tokens"></span></header>
       <div class="inspect-heading"><span id="inspect-kind" class="kind-mark"></span><h2 id="inspect-title"></h2></div>
       <p id="inspect-source" class="source"></p>
+      <p id="capture-note" class="source"></p>
       <select id="inspect-parts" aria-label="选择内容片段" hidden></select>
       <div class="inspect-actions"><button id="pin-block" type="button">固定这段</button><button id="fold-block" type="button" hidden>下次折叠此结果</button></div>
+      <details id="pin-editor" class="pin-editor" hidden><summary>固定上下文 <span id="pin-indicator"></span></summary><div class="pin-content"><textarea id="pin-note" rows="4" maxlength="2000" placeholder="希望 Agent 始终记住的补充信息…" aria-label="固定上下文"></textarea><div class="pin-footer"><span id="pin-count">0 / 2000</span><button id="pin-save" type="button" class="primary">保存</button></div></div></details>
       <p id="inspect-note" class="inspect-note" hidden></p>
       <pre id="inspect-text" tabindex="0"></pre>
     </section>

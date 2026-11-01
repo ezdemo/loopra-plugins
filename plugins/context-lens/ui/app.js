@@ -17,10 +17,10 @@
   function showEmpty() {
     snapshot = null; selectedBlock = null; selectedParts = []; usage = null;
     $("empty").hidden = false; $("overview").hidden = true; $("inspector").hidden = true;
-    $("blocks").replaceChildren(); $("map").replaceChildren(); $("requests").replaceChildren();
+    $("blocks").replaceChildren(); $("map").replaceChildren();
     $("empty-text").textContent = "选择一段已有消息的会话，即可查看上下文。";
   }
-  function back() { selectedBlock = null; $("inspector").hidden = true; $("overview").hidden = false; }
+  function back() { selectedBlock = null; following = true; $("inspector").hidden = true; $("overview").hidden = false; }
   function syncRule(next) {
     rule = { note: typeof next?.note === "string" ? next.note : "", folded: Array.isArray(next?.folded) ? next.folded : [] };
     if (!dirty) $("pin-note").value = rule.note;
@@ -135,8 +135,7 @@
   }
   function renderBlocks() {
     if (!snapshot) return;
-    const query = $("search").value.toLocaleLowerCase().trim();
-    const items = rows().filter(row => (!filter || row.kind === filter) && (!query || row.blocks.some(block => `${block.title} ${block.source} ${block.text}`.toLocaleLowerCase().includes(query))));
+    const items = rows().filter(row => !filter || row.kind === filter);
     $("blocks").replaceChildren(); $("filters").replaceChildren();
     ["", ...Object.keys(labels).filter(kind => kind !== "free" && (kind !== "media" || snapshot.media))].forEach(kind => {
       const button = node("button", kind ? labels[kind] : "全部"); button.type = "button"; button.dataset.kind = kind;
@@ -192,6 +191,7 @@
   }
   function inspect(block) {
     following = false; selectedBlock = block;
+    $("pin-editor").hidden = true;
     $("overview").hidden = true; $("inspector").hidden = false;
     $("inspect-title").textContent = block.title; $("inspect-kind").style.setProperty("--tone", tones[kindOf(block)]);
     $("inspect-tokens").textContent = block.kind === "media" ? "媒体不计入估算" : "~" + number(block.tokens) + " tokens";
@@ -205,12 +205,11 @@
     const next = await loopra.request("detail", { id });
     if (version !== generation || request !== picking) return;
     const changed = snapshot?.id !== next.id; snapshot = next;
-    if (changed) { dirty = false; filter = ""; expanded = false; $("search").value = ""; back(); }
+    if (changed) { dirty = false; filter = ""; expanded = false; back(); }
     $("empty").hidden = true; if (!selectedBlock) $("overview").hidden = false;
-    $("requests").value = next.id; $("time").textContent = time(next.at);
     const historical = next.origin === "history";
     $("model").textContent = next.model || next.agent || "模型未知"; $("model").title = next.model || next.agent || "";
-    $("pin-editor").hidden = next.native === false; $("clear").hidden = historical;
+    $("pin-editor").hidden = true;
     $("capture-note").textContent = (historical ? "会话历史 · 不代表当时的完整模型请求" : "发送前快照 · 分类用量为文本估算，未计媒体与协议开销") + (next.truncated ? " · 部分内容已截断" : "");
     renderMetrics(); renderMap(); renderBlocks(); renderSession();
     const config = await loopra.config.get();
@@ -226,10 +225,6 @@
       const usageChanged = JSON.stringify(usage) !== JSON.stringify(data.usage || null); usage = data.usage || null;
       if (!records.length) { showEmpty(); return; }
       const selected = following || !records.some(record => record.id === snapshot?.id) ? records[0].id : snapshot.id;
-      $("requests").replaceChildren(...records.map((record, index) => {
-        const option = node("option", `${record.origin === "history" ? "会话历史 · " : ""}${time(record.at)}${index === 0 && record.origin !== "history" ? " · 最新请求" : ""} · ~${number(record.tokens)}`); option.value = record.id; return option;
-      }));
-      $("requests").value = selected;
       document.querySelector(".live-dot").classList.toggle("paused", !following || records.find(record => record.id === selected)?.origin === "history");
       if (selected !== snapshot?.id) await pick(selected);
       else { if (usageChanged) { renderMetrics(); renderMap(); } renderSession(); }
@@ -251,23 +246,18 @@
       dirty = false; syncRule(next); status("已保存，将在这段会话的下一次模型请求生效。");
     } finally { saving = false; $("pin-save").disabled = false; if (selectedBlock) renderFold(); }
   }
-  $("requests").onchange = action(async () => { following = false; await pick($("requests").value); });
-  $("latest").onclick = action(async () => { following = true; back(); await refresh(true); });
   $("view-tree").onclick = () => { view = "tree"; renderMap(); }; $("view-grid").onclick = () => { view = "grid"; renderMap(); };
   $("show-all").onclick = () => { expanded = !expanded; renderBlocks(); };
-  $("search").oninput = () => { expanded = false; renderBlocks(); };
-  $("search-toggle").onclick = () => { $("search").hidden = !$("search").hidden; $("search-toggle").setAttribute("aria-expanded", String(!$("search").hidden)); if (!$("search").hidden) $("search").focus(); else { $("search").value = ""; renderBlocks(); } };
   $("back").onclick = back;
   $("inspect-parts").onchange = () => inspect(selectedParts[Number($("inspect-parts").value)]);
   $("pin-note").oninput = () => { dirty = true; following = false; $("pin-count").textContent = $("pin-note").value.length + " / 2000"; };
   $("pin-save").onclick = action(() => saveRule({ note: $("pin-note").value.trim() }));
   $("fold-block").onclick = action(() => saveRule({ folded: rule.folded.includes(selectedBlock.callId) ? rule.folded.filter(id => id !== selectedBlock.callId) : [...rule.folded, selectedBlock.callId] }));
   $("pin-block").onclick = () => {
-    const text = selectedBlock.text; back(); document.querySelector(".options").open = true; $("pin-editor").open = true; $("pin-note").value = text.slice(0, 2000); dirty = true;
+    const text = selectedBlock.text; $("pin-editor").hidden = false; $("pin-editor").open = true; $("pin-note").value = text.slice(0, 2000); dirty = true;
     $("pin-note").oninput(); $("pin-note").focus(); if (text.length > 2000) status("已截取前 2000 字符，可编辑后保存。");
   };
   $("empty-refresh").onclick = () => refresh(true);
-  $("clear").onclick = action(async () => { await loopra.request("clear"); await refresh(true); });
   loopra.ready.then(() => {
     const update = context => {
       const next = JSON.stringify([context.workspaceHash || "", context.sessionId || ""]); if (next === scope) return;
