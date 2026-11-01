@@ -254,7 +254,6 @@
   $("requests").onchange = action(async () => { following = false; await pick($("requests").value); });
   $("latest").onclick = action(async () => { following = true; back(); await refresh(true); });
   $("view-tree").onclick = () => { view = "tree"; renderMap(); }; $("view-grid").onclick = () => { view = "grid"; renderMap(); };
-  $("collapse").onclick = () => { $("window-body").hidden = !$("window-body").hidden; $("collapse").setAttribute("aria-expanded", String(!$("window-body").hidden)); };
   $("show-all").onclick = () => { expanded = !expanded; renderBlocks(); };
   $("search").oninput = () => { expanded = false; renderBlocks(); };
   $("search-toggle").onclick = () => { $("search").hidden = !$("search").hidden; $("search-toggle").setAttribute("aria-expanded", String(!$("search").hidden)); if (!$("search").hidden) $("search").focus(); else { $("search").value = ""; renderBlocks(); } };

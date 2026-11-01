@@ -166,10 +166,6 @@ test('capacity grid uses reported context, real cache statistics, and preserves 
     assert.equal(d.querySelector('#filters [data-kind="file"]').getAttribute('aria-pressed'), 'true');
     d.querySelector('#view-grid').click();
     assert.equal(d.querySelectorAll('.grid-cell').length, 400);
-    d.querySelector('#collapse').click();
-    assert.equal(d.querySelector('#window-body').hidden, true);
-    d.querySelector('#collapse').click();
-    assert.equal(d.querySelector('#window-body').hidden, false);
   } finally { ui.close(); }
 });
 

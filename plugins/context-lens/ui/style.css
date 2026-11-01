@@ -11,10 +11,7 @@ button:focus-visible, summary:focus-visible, select:focus-visible, input:focus-v
 main { margin: auto; padding: 20px 22px 14px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface, #fff); min-width: 0; }
 #status { padding: 8px 10px; margin-bottom: 14px; border-radius: 7px; background: var(--track); color: var(--subtle); overflow-wrap: anywhere; }
 #status.error { color: var(--danger, #d6453d); }
-.window-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 20px; }
-.window-title { display: inline-flex; align-items: center; gap: 10px; padding: 2px 9px; margin-left: -6px; background: var(--track); font-size: 18px; font-weight: 650; white-space: nowrap; }
-.chevron { color: var(--subtle); font-size: 16px; font-weight: 400; transition: transform .15s; }
-.window-title[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
+.window-header { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 20px; }
 .model-status { display: flex; align-items: center; justify-content: flex-end; gap: 12px; min-width: 0; color: var(--subtle); }
 .model { font: 13px var(--loopra-code, Consolas, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .measurement { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; padding: 3px 10px; border-radius: 20px; background: var(--track); color: var(--secondary, #636779); font-size: 12px; }
@@ -122,8 +119,6 @@ button.primary { background: var(--accent); color: #fff; }
 @media (max-width: 600px) {
   body { padding: 8px; font-size: 13px; }
   main { padding: 16px 14px 12px; border-radius: 15px; }
-  .window-header { align-items: flex-start; gap: 8px; }
-  .window-title { font-size: 15px; gap: 5px; }
   .model-status { flex-wrap: wrap; gap: 5px; }
   .model { font-size: 10px; max-width: 150px; }
   .measurement { font-size: 10px; padding: 2px 7px; }
