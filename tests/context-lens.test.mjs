@@ -142,7 +142,7 @@ test('a late detail response cannot show the previous workspace snapshot', async
   } finally { ui.close(); }
 });
 
-test('capacity grid uses reported context, real cache statistics, and preserves view filters', async () => {
+test('capacity grid uses reported context, real cache statistics, and category filters', async () => {
   const usage = { model: snapshot.model, at: snapshot.at + 1, lastPromptTokens: 2500, maxContextTokens: 10000, promptTokens: 10000, cacheHit: 3400 };
   const ui = setup({ usage });
   try {
@@ -159,11 +159,7 @@ test('capacity grid uses reported context, real cache statistics, and preserves 
     assert.equal([...d.querySelectorAll('.grid-cell')].filter(cell => cell.title.startsWith('剩余空间')).length, 300);
     d.querySelector('#legend [aria-label^="文件"]').click();
     assert.equal(d.querySelectorAll('.block').length, 1);
-    d.querySelector('#view-tree').click();
-    assert.ok(d.querySelectorAll('.map-cell').length >= 4);
-    assert.equal(d.querySelector('#view-tree').getAttribute('aria-pressed'), 'true');
     assert.equal(d.querySelector('#filters [data-kind="file"]').getAttribute('aria-pressed'), 'true');
-    d.querySelector('#view-grid').click();
     assert.equal(d.querySelectorAll('.grid-cell').length, 400);
   } finally { ui.close(); }
 });

@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   const tones = { system: "#8b5cf6", tools: "#0ea5e9", file: "#10b981", result: "#f45b0b", chat: "#5546ef", media: "#9ca3af", free: "var(--track)" };
   const labels = { system: "系统提示词", tools: "工具", file: "文件", result: "工具结果", chat: "会话内容", media: "媒体", free: "剩余空间" };
-  let records = [], usage = null, snapshot = null, selectedBlock = null, selectedParts = [], filter = "", view = "grid", expanded = false;
+  let records = [], usage = null, snapshot = null, selectedBlock = null, selectedParts = [], filter = "", expanded = false;
   let following = true, generation = 0, pending = 0, picking = 0, scope = "", dirty = false, saving = false, rule = { note: "", folded: [] };
   const number = value => {
     value = Math.max(0, Number(value) || 0);
@@ -70,52 +70,30 @@
     $("cache-note").textContent = hasCache ? `${number(cached)} 来自缓存 · ${number(Math.max(0, prompt - cached))} 新增` : "暂无缓存数据";
     $("cache-note").title = "本会话累计提示词缓存统计";
   }
-  function split(items, x, y, width, height, output = []) {
-    if (!items.length) return output;
-    if (items.length === 1) { output.push({ item: items[0], x, y, width, height }); return output; }
-    const total = items.reduce((sum, item) => sum + item.weight, 0);
-    let sum = 0, at = 1, best = Infinity;
-    for (let i = 1; i < items.length; i++) { sum += items[i - 1].weight; const distance = Math.abs(total / 2 - sum); if (distance < best) { best = distance; at = i; } }
-    const ratio = items.slice(0, at).reduce((sum, item) => sum + item.weight, 0) / total;
-    if (width >= height) { split(items.slice(0, at), x, y, width * ratio, height, output); split(items.slice(at), x + width * ratio, y, width * (1 - ratio), height, output); }
-    else { split(items.slice(0, at), x, y, width, height * ratio, output); split(items.slice(at), x, y + height * ratio, width, height * (1 - ratio), output); }
-    return output;
-  }
   function setFilter(kind) { filter = filter === kind ? "" : kind; expanded = false; renderMap(); renderBlocks(); }
   function renderMap() {
     if (!snapshot) return;
-    const map = $("map"), legend = $("legend"); map.replaceChildren(); legend.replaceChildren(); map.className = "context-map " + view;
+    const map = $("map"), legend = $("legend"); map.replaceChildren(); legend.replaceChildren();
     const groups = composition(), total = groups.reduce((sum, group) => sum + group.weight, 0);
-    if (view === "grid") {
-      // Largest-remainder allocation keeps all 400 cells proportional, including free space.
-      const shares = groups.map(group => { const exact = total ? group.weight / total * 400 : 0; return { group, count: Math.floor(exact), fraction: exact % 1 }; });
-      let remaining = 400 - shares.reduce((sum, share) => sum + share.count, 0);
-      const ranked = [...shares].sort((a, b) => b.fraction - a.fraction);
-      for (let i = 0; i < remaining && ranked.length; i++) ranked[i % ranked.length].count++;
-      shares.forEach(({ group, count }) => {
-        for (let i = 0; i < count; i++) {
-          const cell = node("span", undefined, `grid-cell${filter && group.kind !== filter ? " dimmed" : ""}`);
-          cell.style.setProperty("--tone", tones[group.kind]); cell.setAttribute("aria-hidden", "true"); cell.title = `${group.label} ${number(group.tokens)}`;
-          cell.onclick = () => { if (group.kind !== "free") setFilter(group.kind); }; map.append(cell);
-        }
-      });
-      if (!total) for (let i = 0; i < 400; i++) map.append(node("span", undefined, "grid-cell"));
-    } else {
-      split(groups.filter(group => group.weight > 0), 0, 0, 100, 40).forEach(({ item, x, y, width, height }) => {
-        const cell = node("button", undefined, `map-cell${width < 25 || height < 15 ? " small" : ""}${width < 12 || height < 8 ? " tiny" : ""}${filter === item.kind ? " active" : ""}`);
-        cell.type = "button"; cell.style.cssText = `left:${x}%;top:${y / 40 * 100}%;width:${width}%;height:${height / 40 * 100}%;--tone:${tones[item.kind]}`;
-        cell.setAttribute("aria-label", `${item.label}，约 ${number(item.tokens)} tokens`); cell.title = cell.getAttribute("aria-label");
-        cell.setAttribute("aria-pressed", String(filter === item.kind)); cell.append(node("strong", item.label), node("span", number(item.tokens)));
-        cell.onclick = () => { if (item.kind !== "free") setFilter(item.kind); }; map.append(cell);
-      });
-    }
+    // Largest-remainder allocation keeps all 400 cells proportional, including free space.
+    const shares = groups.map(group => { const exact = total ? group.weight / total * 400 : 0; return { group, count: Math.floor(exact), fraction: exact % 1 }; });
+    let remaining = 400 - shares.reduce((sum, share) => sum + share.count, 0);
+    const ranked = [...shares].sort((a, b) => b.fraction - a.fraction);
+    for (let i = 0; i < remaining && ranked.length; i++) ranked[i % ranked.length].count++;
+    shares.forEach(({ group, count }) => {
+      for (let i = 0; i < count; i++) {
+        const cell = node("span", undefined, `grid-cell${filter && group.kind !== filter ? " dimmed" : ""}`);
+        cell.style.setProperty("--tone", tones[group.kind]); cell.setAttribute("aria-hidden", "true"); cell.title = `${group.label} ${number(group.tokens)}`;
+        cell.onclick = () => { if (group.kind !== "free") setFilter(group.kind); }; map.append(cell);
+      }
+    });
+    if (!total) for (let i = 0; i < 400; i++) map.append(node("span", undefined, "grid-cell"));
     groups.forEach(group => {
       const button = node("button"); button.type = "button"; button.style.setProperty("--tone", tones[group.kind]);
       button.setAttribute("aria-label", `${group.label}，${number(group.tokens)} tokens`); button.setAttribute("aria-pressed", String(filter === group.kind));
       button.append(node("i"), node("span", group.label), node("span", number(group.tokens), "legend-value"));
       if (group.kind === "free") button.disabled = true; else button.onclick = () => setFilter(group.kind); legend.append(button);
     });
-    $("view-grid").setAttribute("aria-pressed", String(view === "grid")); $("view-tree").setAttribute("aria-pressed", String(view === "tree"));
   }
   function rows() {
     const grouped = new Map(); let turn = 0;
@@ -246,7 +224,6 @@
       dirty = false; syncRule(next); status("已保存，将在这段会话的下一次模型请求生效。");
     } finally { saving = false; $("pin-save").disabled = false; if (selectedBlock) renderFold(); }
   }
-  $("view-tree").onclick = () => { view = "tree"; renderMap(); }; $("view-grid").onclick = () => { view = "grid"; renderMap(); };
   $("show-all").onclick = () => { expanded = !expanded; renderBlocks(); };
   $("back").onclick = back;
   $("inspect-parts").onchange = () => inspect(selectedParts[Number($("inspect-parts").value)]);
