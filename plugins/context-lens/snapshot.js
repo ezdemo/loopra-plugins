@@ -1,18 +1,12 @@
 import { Buffer } from "node:buffer";
 
-export const PIN_START = "\n\n<loopra_context_pin>\n";
-export const PIN_END = "\n</loopra_context_pin>";
-export const FOLDED = "此工具结果已由用户在上下文透镜中折叠";
 const MAX_TEXT = 96000;
-const labels = { system: "系统与项目规则", tools: "工具定义", user: "用户消息", assistant: "助手消息", result: "工具结果", media: "媒体", pin: "固定上下文" };
+const labels = { system: "系统与项目规则", tools: "工具定义", user: "用户消息", assistant: "助手消息", result: "工具结果", media: "媒体" };
 export const scopeKey = (app, session) => JSON.stringify([app || "", session || ""]);
 export function selection(context = {}) {
   const app = context.workspaceHash || "";
   const id = context.sessionId || "";
   return { app, session: id.startsWith(app + "/") ? id.slice(app.length + 1) : id };
-}
-export function policy(config, app, session) {
-  return (Array.isArray(config?.rules) ? config.rules : []).find(rule => rule?.key === scopeKey(app, session)) || { note: "", folded: [] };
 }
 
 export function buildHistory(data, scope) {
@@ -48,21 +42,17 @@ export function buildSnapshot(input, id, now = Date.now()) {
     const full = printable(text), bytes = Buffer.byteLength(full, "utf8");
     blocks.push({ id: "block-" + blockSequence++, kind, title: title || labels[kind], source, name, callId, turn,
       filePath: calls.get(callId)?.filePath || "",
-      foldable: kind === "result" && !!callId && (input.foldableCalls || []).includes(callId),
-      folded: kind === "result" && full.includes(FOLDED), text: full.slice(0, MAX_TEXT), truncated: full.length > MAX_TEXT,
+      text: full.slice(0, MAX_TEXT), truncated: full.length > MAX_TEXT,
       bytes, tokens: kind === "media" ? 0 : Math.ceil(bytes / 4) });
   }
   function system(value, source) {
     const text = typeof value === "string" ? value : Array.isArray(value) ? value.map(item => item.text || "").join("\n") : printable(value);
     if (!text) return;
-    const at = text.indexOf(PIN_START);
-    const rest = at < 0 ? text : text.slice(0, at);
-    const skills = rest.indexOf("可用技能（先使用 skillread 读取完整规约）：");
+    const skills = text.indexOf("可用技能（先使用 skillread 读取完整规约）：");
     if (skills >= 0) {
-      add("system", rest.slice(0, skills), source, "系统与项目规则");
-      add("system", rest.slice(skills), source, "技能目录");
-    } else add("system", rest, source);
-    if (at >= 0) add("pin", text.slice(at + PIN_START.length).replace(PIN_END, ""), source);
+      add("system", text.slice(0, skills), source, "系统与项目规则");
+      add("system", text.slice(skills), source, "技能目录");
+    } else add("system", text, source);
   }
   function content(value, role, source) {
     const kind = role === "assistant" ? "assistant" : role === "tool" ? "result" : "user";

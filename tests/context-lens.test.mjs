@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { JSDOM } from 'jsdom';
-import { buildSnapshot, buildHistory, PIN_START, PIN_END } from '../plugins/context-lens/snapshot.js';
-import { llmRequest } from '../plugins/context-lens/plugin.js';
+import { buildSnapshot, buildHistory } from '../plugins/context-lens/snapshot.js';
+import * as plugin from '../plugins/context-lens/plugin.js';
 
 const body = { model: 'fixture-model', messages: [
   { role: 'system', content: 'PROJECT RULES\n\n可用技能（先使用 skillread 读取完整规约）：\n- audit: inspect changes' },
@@ -16,7 +16,6 @@ const snapshot = buildSnapshot({ app: 'project', sessionId: 'one', body, protoco
 test('lens projects actual protocol fields, distinguishes skill listings and omits media payloads', () => {
   assert.equal(snapshot.blocks.filter(block => block.kind === 'result').length, 1);
   assert.ok(snapshot.blocks.some(block => block.title === '技能目录'));
-  assert.ok(snapshot.blocks.find(block => block.kind === 'result').foldable);
   assert.equal(snapshot.groups.reduce((sum, group) => sum + group.tokens, 0), snapshot.tokens);
   const anthropic = buildSnapshot({ body: { model: 'claude', system: 'RULES', messages: [{ role: 'user', content: [
     { type: 'tool_result', tool_use_id: 't1', content: 'RESULT' }, { type: 'image', source: { type: 'base64', data: 'SECRET_BINARY' } },
@@ -24,10 +23,10 @@ test('lens projects actual protocol fields, distinguishes skill listings and omi
   assert.ok(anthropic.media);
   assert.ok(anthropic.blocks.some(block => block.kind === 'result' && block.text === 'RESULT'));
   assert.ok(!JSON.stringify(anthropic).includes('SECRET_BINARY'));
-  const responses = buildSnapshot({ body: { instructions: 'BASE' + PIN_START + 'PINNED' + PIN_END, input: [
+  const responses = buildSnapshot({ body: { instructions: 'BASE RULES', input: [
     { type: 'function_call_output', call_id: 'r1', output: 'RESPONSE' }, { role: 'user', content: [{ type: 'input_text', text: 'question' }] },
   ] } }, '3');
-  assert.ok(responses.blocks.some(block => block.kind === 'pin' && block.text === 'PINNED'));
+  assert.ok(responses.blocks.some(block => block.kind === 'system' && block.text === 'BASE RULES'));
   assert.ok(responses.blocks.some(block => block.kind === 'result' && block.text === 'RESPONSE'));
   const opaque = buildSnapshot({body:{input:[{type:'reasoning', summary:[], encrypted_content:'OPAQUE_PAYLOAD'}]}}, 'opaque');
   assert.equal(opaque.tokens, 0);
@@ -47,7 +46,7 @@ function setup({ holdDetail = false, recorded = snapshot, usage = null, summarie
   const listeners = [], requests = [];
   const dom = new JSDOM(page, { runScripts: 'dangerously', beforeParse(window) {
     window.loopra = { ready: Promise.resolve(), context, onContext: fn => listeners.push(fn),
-      config: { get: async () => structuredClone(config), set: async value => { config = JSON.parse(JSON.stringify(value)); return config; } },
+      config: { get: async () => { throw new Error('read-only lens must not load settings'); }, set: async () => { throw new Error('read-only lens must not save settings'); } },
       request: async (action, value) => {
         requests.push({ action, value });
         if (action === 'list') return { records: context.workspaceHash === 'project' ? summaries || [{ ...recorded, blocks: undefined }] : [], usage };
@@ -61,7 +60,7 @@ function setup({ holdDetail = false, recorded = snapshot, usage = null, summarie
     release: () => release?.(), change: next => { context = next; listeners.forEach(fn => fn(next)); }, close: () => dom.window.close() };
 }
 
-test('lens UI filters real blocks, inspects inert text, and saves scoped pin/fold controls', async () => {
+test('lens UI filters real blocks and inspects inert text without context modification controls', async () => {
   const ui = setup();
   try {
     await settle(); await settle();
@@ -74,18 +73,11 @@ test('lens UI filters real blocks, inspects inert text, and saves scoped pin/fol
     assert.equal(d.querySelector('#inspector').hidden, false);
     assert.match(d.querySelector('#inspect-text').textContent, /malicious/);
     assert.equal(d.querySelector('#inspect-text script'), null);
-    d.querySelector('#fold-block').click(); await settle();
-    assert.deepEqual(ui.config.rules[0].folded, ['read-1']);
-    assert.equal(ui.config.rules[0].key, '["project","one"]');
-    d.querySelector('#pin-block').click();
-    d.querySelector('#pin-note').value = 'Remember the migration constraint';
-    d.querySelector('#pin-note').dispatchEvent(new ui.window.Event('input'));
-    d.querySelector('#pin-save').click(); await settle();
-    const rewritten = llmRequest({ app: 'project', sessionId: 'one', system: 'BASE', config: ui.config });
-    assert.match(rewritten.system, /Remember the migration constraint/);
-    assert.deepEqual(rewritten.foldToolResults, ['read-1']);
-    assert.deepEqual(llmRequest({ app: 'project', sessionId: 'two', system: 'BASE', config: ui.config }), {});
-    assert.match(d.querySelector('#status').textContent, /下一次模型请求/);
+    assert.equal(d.querySelector('#pin-block'), null);
+    assert.equal(d.querySelector('#fold-block'), null);
+    assert.equal(d.querySelector('#pin-editor'), null);
+    assert.equal(plugin.llmRequest, undefined, 'saved settings cannot rewrite future requests');
+    assert.deepEqual(ui.config, {});
   } finally { ui.close(); }
 });
 
@@ -111,11 +103,10 @@ test('external history is labelled and hides controls that only work on native r
     assert.equal(d.querySelector('#overview').hidden, false);
     assert.match(d.querySelector('#measurement-label').textContent, /历史估算/);
     assert.match(d.querySelector('#capture-note').textContent, /不代表当时的完整模型请求.*截断/);
-    assert.equal(d.querySelector('#pin-editor').hidden, true);
     d.querySelector('#legend [aria-label^="文件"]').click();
     d.querySelector('.block').click();
-    assert.equal(d.querySelector('#fold-block').hidden, true);
-    assert.equal(d.querySelector('#pin-block').hidden, true);
+    assert.equal(d.querySelector('#fold-block'), null);
+    assert.equal(d.querySelector('#pin-block'), null);
     assert.match(d.querySelector('#inspect-text').textContent, /real tool output/);
   } finally { ui.close(); }
 });
@@ -229,7 +220,7 @@ test('missing usage and stale or mismatched model counts retain honest estimates
   }
 });
 
-test('grouped tool results retain individual source and fold identity; expansion works', async () => {
+test('grouped tool results retain individual source text; expansion works', async () => {
   const recorded = buildSnapshot({ app: 'project', sessionId: 'one', protocol: 'chat_completions', body: { messages: [
     { role: 'user', content: 'inspect' },
     ...Array.from({ length: 2 }, (_, i) => ({ role: 'tool', name: 'powershell', tool_call_id: 'shell-' + i, content: 'output-' + i })),
@@ -249,8 +240,6 @@ test('grouped tool results retain individual source and fold identity; expansion
     assert.equal(select.hidden, false);
     select.value = '1'; select.dispatchEvent(new ui.window.Event('change'));
     assert.equal(d.querySelector('#inspect-text').textContent, 'output-1');
-    d.querySelector('#fold-block').click(); await settle();
-    assert.deepEqual(ui.config.rules[0].folded, ['shell-1']);
     d.querySelector('#back').click();
     d.querySelector('#filters [data-kind=""]').click();
     assert.equal(d.querySelectorAll('.block').length, 8);

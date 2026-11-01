@@ -3,31 +3,22 @@
   const tones = { system: "#8b5cf6", tools: "#0ea5e9", file: "#10b981", result: "#f45b0b", chat: "#5546ef", media: "#9ca3af", free: "var(--track)" };
   const labels = { system: "系统提示词", tools: "工具", file: "文件", result: "工具结果", chat: "会话内容", media: "媒体", free: "剩余空间" };
   let records = [], usage = null, snapshot = null, selectedBlock = null, selectedParts = [], filter = "", expanded = false;
-  let following = true, generation = 0, pending = 0, picking = 0, scope = "", dirty = false, saving = false, rule = { note: "", folded: [] };
+  let following = true, generation = 0, pending = 0, picking = 0, scope = "";
   const number = value => {
     value = Math.max(0, Number(value) || 0);
     const unit = value >= 1e6 ? 1e6 : value >= 1e3 ? 1e3 : 1;
     return (unit === 1 ? String(Math.round(value)) : (value / unit).toFixed(value / unit < 10 ? 2 : 1).replace(/\.?0+$/, "")) + (unit === 1e6 ? "M" : unit === 1e3 ? "K" : "");
   };
   const time = value => new Date(value).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-  const keyOf = record => JSON.stringify([record.app || "", record.session || ""]);
   function node(tag, text, className) { const el = document.createElement(tag); if (text !== undefined) el.textContent = String(text); if (className) el.className = className; return el; }
   function status(text = "", error = false) { $("status").hidden = !text; $("status").textContent = text; $("status").className = error ? "error" : ""; }
-  function action(task) { return async () => { try { await task(); } catch (error) { status(error.message || String(error), true); } }; }
   function showEmpty() {
     snapshot = null; selectedBlock = null; selectedParts = []; usage = null;
     $("empty").hidden = false; $("overview").hidden = true; $("inspector").hidden = true;
     $("blocks").replaceChildren(); $("map").replaceChildren();
     $("empty-text").textContent = "选择一段已有消息的会话，即可查看上下文。";
   }
-  function back() { selectedBlock = null; following = true; $("inspector").hidden = true; $("overview").hidden = false; }
-  function syncRule(next) {
-    rule = { note: typeof next?.note === "string" ? next.note : "", folded: Array.isArray(next?.folded) ? next.folded : [] };
-    if (!dirty) $("pin-note").value = rule.note;
-    $("pin-indicator").textContent = rule.note ? "已固定" : "";
-    $("pin-count").textContent = $("pin-note").value.length + " / 2000";
-    if (selectedBlock) renderFold();
-  }
+  function back() { selectedBlock = null; following = true; $("inspector").hidden = true; $("overview").hidden = false; if (snapshot) renderBlocks(); }
   function kindOf(block) {
     if (block.kind === "system" || block.kind === "pin") return "system";
     if (block.kind === "user" || block.kind === "assistant") return "chat";
@@ -124,6 +115,14 @@
     });
     return [...grouped.values()].sort((a, b) => b.tokens - a.tokens);
   }
+  function previewLimit() {
+    const bounds = $("blocks").getBoundingClientRect();
+    if (!bounds.width) return 8;
+    const outerHeight = el => { const style = getComputedStyle(el); return el.offsetHeight + parseFloat(style.marginTop) + parseFloat(style.marginBottom); };
+    const mainStyle = getComputedStyle(document.querySelector("main")), bodyStyle = getComputedStyle(document.body);
+    const reserve = outerHeight(document.querySelector(".session-footer")) + ($("show-all").hidden ? 0 : outerHeight($("show-all"))) + parseFloat(mainStyle.paddingBottom) + parseFloat(mainStyle.borderBottomWidth) + parseFloat(bodyStyle.paddingBottom);
+    return Math.max(8, Math.floor((innerHeight - bounds.top - scrollY - reserve) / 36));
+  }
   function renderBlocks() {
     if (!snapshot) return;
     const items = rows().filter(row => !filter || row.kind === filter);
@@ -133,19 +132,21 @@
       button.setAttribute("aria-pressed", String(filter === kind)); button.onclick = () => { filter = kind; expanded = false; renderMap(); renderBlocks(); }; $("filters").append(button);
     });
     $("no-results").hidden = !!items.length;
+    $("show-all").hidden = items.length <= 8;
+    $("show-all").textContent = expanded ? "收起" : `显示全部 ${items.length} 项`;
+    const limit = previewLimit();
     const max = Math.max(1, ...items.map(row => row.tokens));
-    (expanded ? items : items.slice(0, 8)).forEach(row => {
+    (expanded ? items : items.slice(0, limit)).forEach(row => {
       const button = node("button", undefined, "block"); button.type = "button"; button.style.setProperty("--tone", tones[row.kind]);
       const identity = node("span", undefined, "block-identity"); identity.append(node("i", undefined, "kind-mark"), node("strong", row.title));
       if (row.path) identity.append(node("span", row.path, "block-path"));
       const tag = node("span", undefined, "block-tag"); if (row.kind === "file" || row.kind === "result") tag.append(node("code", row.kind === "file" ? "read" : "result"));
       const bar = node("span", undefined, "block-bar"); bar.style.setProperty("--fill", row.tokens / max * 100 + "%"); bar.append(node("i"));
       button.append(identity, node("span", row.blocks.length > 1 ? "×" + row.blocks.length : "", "block-count"), tag, bar, node("span", row.kind === "media" ? "未计入" : number(row.tokens), "block-tokens"));
-      button.title = row.blocks.map(block => block.title + (block.folded ? " · 已折叠" : "")).join("\n");
+      button.title = row.blocks.map(block => block.title).join("\n");
       button.onclick = () => inspectRow(row.blocks); $("blocks").append(button);
     });
-    $("show-all").hidden = items.length <= 8;
-    $("show-all").textContent = expanded ? "收起" : `显示全部 ${items.length} 项`;
+    $("show-all").hidden = items.length <= limit;
   }
   function renderSession() {
     const context = loopra.context || {};
@@ -168,12 +169,6 @@
     });
     $("trend").setAttribute("aria-label", `最近 ${recent.length} 个请求的文本估算：${recent.map(record => number(record.tokens)).join("，")} tokens`);
   }
-  function renderFold() {
-    const folded = rule.folded.includes(selectedBlock.callId);
-    $("fold-block").hidden = !selectedBlock.foldable;
-    $("fold-block").textContent = folded ? "恢复下次发送原文" : "下次折叠此结果";
-    $("fold-block").disabled = saving; $("pin-block").hidden = snapshot.native === false;
-  }
   function inspectRow(parts) {
     selectedParts = parts;
     $("inspect-parts").hidden = parts.length < 2;
@@ -182,30 +177,24 @@
   }
   function inspect(block) {
     following = false; selectedBlock = block;
-    $("pin-editor").hidden = true;
     $("overview").hidden = true; $("inspector").hidden = false;
     $("inspect-title").textContent = block.title; $("inspect-kind").style.setProperty("--tone", tones[kindOf(block)]);
     $("inspect-tokens").textContent = block.kind === "media" ? "媒体不计入估算" : "~" + number(block.tokens) + " tokens";
     $("inspect-source").textContent = block.source + " · " + time(snapshot.at); $("inspect-text").textContent = block.text;
-    $("inspect-note").hidden = !block.truncated && !block.folded;
-    $("inspect-note").textContent = block.truncated ? "此段过长，展示保留的开头部分；用量按截断前文本估算。" : "这份请求中的结果已经折叠。恢复发送原文将在下一次请求生效。";
-    renderFold();
+    $("inspect-note").hidden = !block.truncated;
+    $("inspect-note").textContent = "此段过长，展示保留的开头部分；用量按截断前文本估算。";
   }
   async function pick(id) {
     const version = generation, request = ++picking;
     const next = await loopra.request("detail", { id });
     if (version !== generation || request !== picking) return;
     const changed = snapshot?.id !== next.id; snapshot = next;
-    if (changed) { dirty = false; filter = ""; expanded = false; back(); }
+    if (changed) { filter = ""; expanded = false; back(); }
     $("empty").hidden = true; if (!selectedBlock) $("overview").hidden = false;
     const historical = next.origin === "history";
     $("model").textContent = next.model || next.agent || "模型未知"; $("model").title = next.model || next.agent || "";
-    $("pin-editor").hidden = true;
     $("capture-note").textContent = (historical ? "会话历史 · 不代表当时的完整模型请求" : "发送前快照 · 分类用量为文本估算，未计媒体与协议开销") + (next.truncated ? " · 部分内容已截断" : "");
-    renderMetrics(); renderMap(); renderBlocks(); renderSession();
-    const config = await loopra.config.get();
-    if (version !== generation || snapshot?.id !== next.id) return;
-    syncRule((Array.isArray(config.rules) ? config.rules : []).find(item => item.key === keyOf(next)));
+    renderMetrics(); renderMap(); renderSession(); renderBlocks();
   }
   async function refresh(force = false) {
     if (pending && !force) return;
@@ -222,36 +211,15 @@
     } catch (error) { if (version === generation) status(error.message || String(error), true); }
     finally { if (version === generation && pending === request) pending = 0; }
   }
-  async function saveRule(change) {
-    if (!snapshot || saving) return;
-    const target = snapshot, version = generation;
-    saving = true; $("pin-save").disabled = true; if (selectedBlock) renderFold();
-    try {
-      const config = await loopra.config.get(); if (version !== generation) return;
-      const rules = Array.isArray(config.rules) ? config.rules : [];
-      const old = rules.find(item => item.key === keyOf(target)) || { note: "", folded: [] };
-      const next = { ...old, ...change, key: keyOf(target) };
-      if (next.note.length > 2000 || next.folded.length > 64) throw new Error("每段会话最多固定 2000 字符、折叠 64 条结果");
-      await loopra.config.set({ ...config, rules: [...rules.filter(item => item.key !== next.key).slice(-11), next] });
-      if (version !== generation) return;
-      dirty = false; syncRule(next); status("已保存，将在这段会话的下一次模型请求生效。");
-    } finally { saving = false; $("pin-save").disabled = false; if (selectedBlock) renderFold(); }
-  }
   $("show-all").onclick = () => { expanded = !expanded; renderBlocks(); };
   $("back").onclick = back;
   $("inspect-parts").onchange = () => inspect(selectedParts[Number($("inspect-parts").value)]);
-  $("pin-note").oninput = () => { dirty = true; following = false; $("pin-count").textContent = $("pin-note").value.length + " / 2000"; };
-  $("pin-save").onclick = action(() => saveRule({ note: $("pin-note").value.trim() }));
-  $("fold-block").onclick = action(() => saveRule({ folded: rule.folded.includes(selectedBlock.callId) ? rule.folded.filter(id => id !== selectedBlock.callId) : [...rule.folded, selectedBlock.callId] }));
-  $("pin-block").onclick = () => {
-    const text = selectedBlock.text; $("pin-editor").hidden = false; $("pin-editor").open = true; $("pin-note").value = text.slice(0, 2000); dirty = true;
-    $("pin-note").oninput(); $("pin-note").focus(); if (text.length > 2000) status("已截取前 2000 字符，可编辑后保存。");
-  };
   $("empty-refresh").onclick = () => refresh(true);
+  window.addEventListener("resize", () => { if (snapshot && !$("overview").hidden) renderBlocks(); });
   loopra.ready.then(() => {
     const update = context => {
       const next = JSON.stringify([context.workspaceHash || "", context.sessionId || ""]); if (next === scope) return;
-      scope = next; generation++; pending = 0; dirty = false; following = true; status(); showEmpty(); void refresh(true);
+      scope = next; generation++; pending = 0; following = true; status(); showEmpty(); void refresh(true);
     };
     loopra.onContext(update); update(loopra.context);
     setInterval(() => { if (document.visibilityState !== "hidden") void refresh(); }, 2000);

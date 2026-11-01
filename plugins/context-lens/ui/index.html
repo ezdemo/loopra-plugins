@@ -16,15 +16,13 @@
       <button id="empty-refresh" type="button">刷新</button>
     </section>
     <div id="overview" hidden>
-      <header class="window-header">
-        <div class="model-status"><span id="model" class="model"></span><span class="measurement"><i class="live-dot" aria-hidden="true"></i><span id="measurement-label">估算</span></span></div>
-      </header>
-      <div>
+      <div class="overview-body">
         <section class="metrics" aria-label="上下文用量">
           <div class="usage-metric">
             <div class="metric-label">已用上下文 <span id="health" class="health" hidden>健康</span></div>
             <div class="metric-value"><strong id="total">—</strong><span id="capacity">/ 未知窗口</span></div>
             <div id="usage-note" class="metric-note">文本估算</div>
+            <div class="model-status"><span id="model" class="model"></span><span class="measurement"><i class="live-dot" aria-hidden="true"></i><span id="measurement-label">估算</span></span></div>
           </div>
           <div class="cache-metric">
             <div class="metric-label">提示词缓存</div>
@@ -54,8 +52,6 @@
       <p id="inspect-source" class="source"></p>
       <p id="capture-note" class="source"></p>
       <select id="inspect-parts" aria-label="选择内容片段" hidden></select>
-      <div class="inspect-actions"><button id="pin-block" type="button">固定这段</button><button id="fold-block" type="button" hidden>下次折叠此结果</button></div>
-      <details id="pin-editor" class="pin-editor" hidden><summary>固定上下文 <span id="pin-indicator"></span></summary><div class="pin-content"><textarea id="pin-note" rows="4" maxlength="2000" placeholder="希望 Agent 始终记住的补充信息…" aria-label="固定上下文"></textarea><div class="pin-footer"><span id="pin-count">0 / 2000</span><button id="pin-save" type="button" class="primary">保存</button></div></div></details>
       <p id="inspect-note" class="inspect-note" hidden></p>
       <pre id="inspect-text" tabindex="0"></pre>
     </section>

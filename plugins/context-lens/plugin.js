@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, renameSync, existsSync, statSync } from "node:fs";
-import { buildSnapshot, buildHistory, selection, policy, PIN_START, PIN_END } from "./snapshot.js";
+import { buildSnapshot, buildHistory, selection } from "./snapshot.js";
 
-export const meta = { displayName: "上下文透镜", description: "查看模型发送前的实际上下文，固定补充信息，折叠冗长工具结果" };
+export const meta = { displayName: "上下文透镜", description: "查看模型发送前的实际上下文和会话历史" };
 export function tools() { return []; }
 let records = [], sequence = 0, size = 0;
 let loaded = false, history = null, storageWarning = "";
@@ -45,13 +45,6 @@ function savedHistory(scope) {
   return history;
 }
 
-export function llmRequest(input) {
-  const rule = policy(input.config, input.app, input.sessionId);
-  const out = {};
-  if (typeof rule.note === "string" && rule.note.trim()) out.system = (input.system || "") + PIN_START + rule.note.trim().slice(0, 2000) + PIN_END;
-  if (Array.isArray(rule.folded) && rule.folded.length) out.foldToolResults = rule.folded.filter(id => typeof id === "string").slice(0, 64);
-  return out;
-}
 export function llmRequestSent(input) {
   load();
   const snapshot = buildSnapshot(input, instance + "-" + (++sequence));
@@ -67,7 +60,7 @@ export function llmRequestSent(input) {
   records.push(snapshot); size += snapshot.size;
   trim(); save();
 }
-export function onRequest({ action, value, context, config }) {
+export function onRequest({ action, value, context }) {
   load();
   const scope = selection(context);
   const matches = record => record.app === scope.app && (!scope.session || record.session === scope.session);
@@ -79,7 +72,7 @@ export function onRequest({ action, value, context, config }) {
     if (scope.app && scope.session) {
       try { usage = loopra.services.request("sessions", "usage", { workspaceHash: scope.app, sessionName: scope.session }); } catch {}
     }
-    return { records: (fallback ? [fallback] : selected).map(({ blocks, size, ...summary }) => summary).reverse(), usage, policy: policy(config, scope.app, scope.session), scope, warning: storageWarning };
+    return { records: (fallback ? [fallback] : selected).map(({ blocks, size, ...summary }) => summary).reverse(), usage, scope, warning: storageWarning };
   }
   if (action === "detail") {
     let record = records.find(record => record.id === value.id && matches(record));

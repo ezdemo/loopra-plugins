@@ -1,8 +1,8 @@
 {
   "name": "context-lens",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "type": "module",
-  "description": "查看模型发送前的上下文快照，固定补充上下文，折叠冗长工具结果",
+  "description": "查看模型发送前的上下文快照和会话历史",
   "loopra": {
     "plugin": "./plugin.js",
     "services": ["sessions"],
