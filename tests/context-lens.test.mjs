@@ -315,3 +315,71 @@ test('Anthropic file reads use the same call metadata without counting tool resu
   assert.equal(record.rounds, 1);
   assert.equal(file.turn, 1);
 });
+
+test('round totals include reasoning, calls, file reads and other results across protocols and saved snapshots', async () => {
+  const chatMessages = [
+    { role: 'system', content: 'SHARED RULES' },
+    { role: 'user', content: [{ type: 'text', text: 'read' }, { type: 'text', text: 'the file' }] },
+    { role: 'assistant', content: 'checking', reasoning_content: 'REQUEST REASONING', tool_calls: [{ id: 'r', function: { name: 'read', arguments: '{"path":"main.go"}' } }] },
+    { role: 'tool', tool_call_id: 'r', content: 'FILE CONTENT '.repeat(10) },
+    { role: 'assistant', tool_calls: [{ id: 's', function: { name: 'powershell', arguments: '{"cmd":"echo ok"}' } }] },
+    { role: 'tool', tool_call_id: 's', content: 'SHELL OUTPUT '.repeat(8) },
+    { role: 'user', content: 'next round' },
+    { role: 'assistant', content: 'done' },
+  ];
+  const tools = [{ type: 'function', function: { name: 'read', description: 'Shared tool definition' } }];
+  const cases = [
+    ['chat_completions', { messages: chatMessages, tools }],
+    ['history', { messages: chatMessages, tools }],
+    ['anthropic', { system: 'SHARED RULES', tools, messages: [
+      { role: 'user', content: [{ type: 'text', text: 'read' }, { type: 'text', text: 'the file' }] },
+      { role: 'assistant', content: [{ type: 'thinking', thinking: 'REQUEST REASONING' }, { type: 'tool_use', id: 'r', name: 'read', input: { path: 'main.go' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'r', content: 'FILE CONTENT '.repeat(10) }] },
+      { role: 'assistant', content: [{ type: 'tool_use', id: 's', name: 'powershell', input: { cmd: 'echo ok' } }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 's', content: 'SHELL OUTPUT '.repeat(8) }] },
+      { role: 'user', content: 'next round' },
+      { role: 'assistant', content: 'done' },
+    ] }],
+    ['responses', { instructions: 'SHARED RULES', tools, input: [
+      { role: 'user', content: [{ type: 'input_text', text: 'read' }, { type: 'input_text', text: 'the file' }] },
+      { type: 'reasoning', summary: [{ text: 'REQUEST REASONING' }] },
+      { type: 'function_call', call_id: 'r', name: 'read', arguments: '{"path":"main.go"}' },
+      { type: 'function_call_output', call_id: 'r', output: 'FILE CONTENT '.repeat(10) },
+      { type: 'function_call', call_id: 's', name: 'powershell', arguments: '{"cmd":"echo ok"}' },
+      { type: 'function_call_output', call_id: 's', output: 'SHELL OUTPUT '.repeat(8) },
+      { role: 'user', content: 'next round' },
+      { role: 'assistant', content: 'done' },
+    ] }],
+  ];
+  for (const [protocol, body] of cases) {
+    const source = buildSnapshot({ app: 'project', sessionId: 'one', protocol, body }, protocol);
+    const included = source.blocks.filter(block => ['user', 'assistant', 'result', 'media'].includes(block.kind));
+    assert.equal(source.rounds, 2, protocol);
+    assert.ok(included.some(block => block.text === 'REQUEST REASONING'), protocol);
+    const total = turn => included.filter(block => block.turn === turn).reduce((sum, block) => sum + block.tokens, 0);
+    assert.ok(total(1) > included.filter(block => block.turn === 1 && ['user', 'assistant'].includes(block.kind)).reduce((sum, block) => sum + block.tokens, 0));
+    for (const legacy of [false, true]) {
+      const recorded = legacy ? { ...source, blocks: source.blocks.map(({ turn, ...block }) => block) } : source;
+      const ui = setup({ recorded });
+      try {
+        await settle(); await settle();
+        const d = ui.document;
+        d.querySelector('#filters [data-kind="chat"]').click();
+        assert.equal(d.querySelectorAll('.block').length, 2, `${protocol}, legacy=${legacy}`);
+        const rows = [...d.querySelectorAll('.block')];
+        for (const turn of [1, 2]) {
+          const row = rows.find(row => row.querySelector('strong').textContent === `第 ${turn} 轮`);
+          assert.equal(row.querySelector('.block-tokens').textContent, String(total(turn)), `${protocol}, round ${turn}, legacy=${legacy}`);
+        }
+        assert.equal(total(1) + total(2), source.tokens - source.blocks.filter(block => ['system', 'tools'].includes(block.kind)).reduce((sum, block) => sum + block.tokens, 0));
+        rows.find(row => row.querySelector('strong').textContent === '第 1 轮').click();
+        const select = d.querySelector('#inspect-parts');
+        assert.equal(select.options.length, included.filter(block => block.turn === 1).length);
+        const fileIndex = [...select.options].findIndex(option => option.textContent.includes('read · main.go'));
+        assert.ok(fileIndex >= 0);
+        select.value = String(fileIndex); select.dispatchEvent(new ui.window.Event('change'));
+        assert.match(d.querySelector('#inspect-text').textContent, /FILE CONTENT/);
+      } finally { ui.close(); }
+    }
+  }
+});

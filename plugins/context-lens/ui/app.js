@@ -100,18 +100,29 @@
     });
   }
   function rows() {
-    const grouped = new Map(); let turn = 0;
-    snapshot.blocks.forEach(block => {
-      const kind = kindOf(block);
-      if (block.kind === "user") turn++;
-      const round = block.turn || turn || 1;
-      const filePath = block.filePath || (kind === "file" ? block.title.split(" · ").slice(1).join(" · ") : "");
-      const parts = filePath.replace(/\\/g, "/").split("/");
-      const title = kind === "file" ? parts.pop() : kind === "chat" ? `第 ${round} 轮` : block.title;
-      const path = kind === "file" ? parts.join("/") : "";
+    const grouped = new Map(); let turn = 0, lastUserSource = "";
+    function append(kind, title, path, block) {
       const key = JSON.stringify([kind, title, path]);
       if (!grouped.has(key)) grouped.set(key, { kind, title, path, tokens: 0, blocks: [] });
       const row = grouped.get(key); row.tokens += block.tokens; row.blocks.push(block);
+    }
+    snapshot.blocks.forEach(block => {
+      const kind = kindOf(block);
+      if (Number.isInteger(block.turn) && block.turn > 0) turn = block.turn;
+      else if (block.kind === "user") {
+        const source = block.source.match(/^(?:messages|input|history)\[\d+\]/)?.[0] || block.id;
+        if (source !== lastUserSource) turn++;
+        lastUserSource = source;
+      }
+      // A round includes all of its messages, reasoning, calls and results.
+      // Shared system instructions and tool definitions stay outside the round.
+      if (["chat", "file", "result", "media"].includes(kind)) append("chat", `第 ${turn || 1} 轮`, "", block);
+      if (kind === "chat") return;
+      const filePath = block.filePath || (kind === "file" ? block.title.split(" · ").slice(1).join(" · ") : "");
+      const parts = filePath.replace(/\\/g, "/").split("/");
+      const title = kind === "file" ? parts.pop() : block.title;
+      const path = kind === "file" ? parts.join("/") : "";
+      append(kind, title, path, block);
     });
     return [...grouped.values()].sort((a, b) => b.tokens - a.tokens);
   }
@@ -153,7 +164,7 @@
     const workspace = (context.workspaceDir || snapshot.app || "会话").replace(/\\/g, "/").split("/").filter(Boolean).pop();
     $("breadcrumb").replaceChildren(node("span", "Loopra"), node("span", "›"), node("span", workspace), node("span", "›"), node("span", snapshot.session));
     $("breadcrumb").title = [context.workspaceDir || snapshot.app, snapshot.session].join(" / ");
-    $("round-count").textContent = `${snapshot.rounds ?? snapshot.blocks.filter(block => block.kind === "user").length} 轮`;
+    $("round-count").textContent = `${snapshot.rounds ?? rows().filter(row => row.kind === "chat").length} 轮`;
     const recent = records.filter(record => record.origin !== "history").slice().reverse();
     $("request-count").textContent = recent.length ? `${recent.length} 个快照` : "会话历史";
     $("trend").replaceChildren();

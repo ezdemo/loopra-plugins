@@ -108,7 +108,7 @@ export function buildSnapshot(input, id, now = Date.now()) {
       if (message.encrypted_content) add("media", "不透明推理载荷（无法估算 token，未保存载荷原文）", path + ".encrypted_content", "推理载荷");
     }
     else content(message.content, message.role, path + ".content");
-    if (input.protocol === "history" && message.reasoning_content) add("assistant", message.reasoning_content, path + ".reasoning_content", "已保存的思考记录");
+    if (message.reasoning_content) add("assistant", message.reasoning_content, path + ".reasoning_content", input.protocol === "history" ? "已保存的思考记录" : "请求携带的推理记录");
     (message.tool_calls || []).forEach((call, n) => add("assistant", call.function, `${path}.tool_calls[${n}]`, "调用 " + (call.function?.name || "工具")));
   });
   (body.tools || []).forEach((tool, index) => add("tools", tool, `tools[${index}]`, tool.function?.name || tool.name || tool.type || "工具定义"));
