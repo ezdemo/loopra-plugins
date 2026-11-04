@@ -8,6 +8,7 @@
 | 每日回顾 | [daily-review](plugins/daily-review/) | 回顾清单、设置页、侧栏、技能、子代理和定时任务 |
 | OpenAPI | [openapi](plugins/openapi/) | 管理 OpenAPI / Swagger 文档，搜索接口、查看参数并调用 |
 | 上下文透视 | [context-lens](plugins/context-lens/) | 查看请求前的实际上下文、分类用量和会话历史 |
+| 回复风格 | [reply-style](plugins/reply-style/) | 在系统提示词末尾追加回复风格：预设（简洁、详细、结论先行、要点式、口语、严谨）与自定义要求可任选其一或同时使用 |
 
 ## 安装
 
@@ -24,6 +25,7 @@ https://github.com/ezdemo/loopra-plugins/tree/main/plugins/chat-neko
 https://github.com/ezdemo/loopra-plugins/tree/main/plugins/daily-review
 https://github.com/ezdemo/loopra-plugins/tree/main/plugins/openapi
 https://github.com/ezdemo/loopra-plugins/tree/main/plugins/context-lens
+https://github.com/ezdemo/loopra-plugins/tree/main/plugins/reply-style
 ```
 
 在「插件 → 我的内容」中启停、设置、更新或卸载，发现页也可以直接更新、卸载已安装的外部插件。安装、更新和卸载保留当前列表与滚动位置。手动填写来源时使用「添加 → 安装插件」。卸载会删除该插件的文件、配置和数据；移除插件源会保留已安装插件。

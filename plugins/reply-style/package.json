@@ -1,0 +1,13 @@
+{
+  "name": "reply-style",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "在系统提示词末尾追加回复风格约定，可选预设并补充自己的要求",
+  "loopra": {
+    "plugin": "./plugin.js",
+    "icon": "./ui/icon.svg",
+    "ui": {
+      "settings": "./ui/index.html"
+    }
+  }
+}

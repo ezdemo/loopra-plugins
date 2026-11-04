@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>回复风格</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>回复风格</h1>
+    <p class="intro">保存后追加到系统提示词末尾，下一轮对话生效。只说“怎么回答”，不改变工具权限和可用范围。</p>
+
+    <section class="block">
+      <h2 id="preset-label">预设</h2>
+      <div id="presets" class="chips" role="radiogroup" aria-labelledby="preset-label"></div>
+      <p id="presets-note" class="note" hidden></p>
+    </section>
+
+    <section class="block">
+      <label for="custom">补充要求
+        <span class="counter" id="counter">0 / 2000</span>
+      </label>
+      <textarea id="custom" rows="6" maxlength="2000" spellcheck="false"
+        placeholder="例如：先说结论，代码块之外不要用列表；不确定时直接说不确定。"></textarea>
+      <p id="custom-note" class="note">可选。会接在上面选中的预设后面，两者同时生效；只填这里、不选预设也可以。</p>
+    </section>
+
+    <section class="block">
+      <label for="scope">生效范围</label>
+      <select id="scope">
+        <option value="all">项目和纯聊天</option>
+        <option value="project">仅项目</option>
+        <option value="chat">仅纯聊天</option>
+      </select>
+    </section>
+
+    <div class="actions">
+      <button id="save" class="primary" type="button">保存</button>
+      <button id="clear" type="button">清空</button>
+      <span id="status" role="status" aria-live="polite"></span>
+    </div>
+
+    <section class="block preview">
+      <h2>追加内容预览</h2>
+      <pre id="preview"></pre>
+    </section>
+  </main>
+  <script src="_loopra/bridge.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
